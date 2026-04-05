@@ -67,6 +67,7 @@
     }
     .logo span { color: var(--blue); }
     .header-right { display: flex; gap: 16px; align-items: center; }
+    .layout-toggle { padding: 4px 8px; font-size: 0.55rem; }
     .status-chip {
       font-family: var(--mono);
       font-size: 0.65rem;
@@ -110,18 +111,59 @@
       grid-template-columns: 260px 1fr 290px;
       height: calc(100vh - 57px);
       overflow: hidden;
+      min-height: 0;
     }
-    .panel { background: var(--surface); border-right: 1px solid var(--border); overflow-y: auto; display: flex; flex-direction: column; }
+    .panel { background: var(--surface); border-right: 1px solid var(--border); overflow-y: auto; display: flex; flex-direction: column; min-height: 0; }
+    .panel.hidden, .ai-panel.hidden { display: none; }
+    .panel-title-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      padding: 10px 12px;
+      border-bottom: 1px solid var(--border);
+      position: sticky;
+      top: 0;
+      background: var(--surface);
+      z-index: 2;
+    }
     .panel-title {
       font-family: var(--mono); font-size: 0.62rem;
       letter-spacing: 0.2em; color: var(--text-dim);
       padding: 12px 18px 10px; border-bottom: 1px solid var(--border);
       text-transform: uppercase; flex-shrink: 0;
     }
+    .panel-title-row .panel-title { padding: 0; border-bottom: none; }
+    .panel-title-row .panel-title {
+      flex: 1;
+      min-width: 0;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .panel-title-row .tiny-btn {
+      flex-shrink: 0;
+      white-space: nowrap;
+    }
     .lane-card { padding: 14px 18px; border-bottom: 1px solid var(--border); transition: background 0.2s; }
     .lane-card:hover { background: var(--surface2); }
+    .lane-card.collapsed { padding-bottom: 10px; }
+    .lane-card.collapsed .density-row,
+    .lane-card.collapsed .lane-stats { display: none; }
     .lane-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 9px; }
+    .lane-header-right { display: inline-flex; align-items: center; gap: 8px; }
     .lane-name { font-family: var(--display); font-size: 1rem; letter-spacing: 0.08em; color: var(--amber); }
+    .lane-fold-btn {
+      border: 1px solid var(--border);
+      background: transparent;
+      color: var(--text-dim);
+      font-family: var(--mono);
+      font-size: 0.56rem;
+      letter-spacing: 0.05em;
+      padding: 2px 6px;
+      cursor: pointer;
+    }
+    .lane-fold-btn:hover { border-color: var(--blue); color: var(--blue); }
     .signal-dot { width: 11px; height: 11px; border-radius: 50%; transition: all 0.5s; }
     .signal-dot.red { background: var(--red); box-shadow: 0 0 8px var(--red); }
     .signal-dot.green { background: var(--green); box-shadow: 0 0 8px var(--green); }
@@ -151,7 +193,7 @@
     }
     .intersection-wrap { position: relative; width: 320px; height: 320px; flex-shrink: 0; }
     .road-h {
-      position: absolute; left: 0; right: 0;
+      position: absolute; left: 50%; right: 0;
       top: 50%; transform: translateY(-50%);
       height: 76px; background: #111828;
       border-top: 2px solid #1e3a5f; border-bottom: 2px solid #1e3a5f;
@@ -163,7 +205,7 @@
       border-left: 2px solid #1e3a5f; border-right: 2px solid #1e3a5f;
     }
     .dash-h {
-      position: absolute; left: 0; right: 0;
+      position: absolute; left: 50%; right: 0;
       top: 50%; transform: translateY(-50%);
       height: 2px;
       background: repeating-linear-gradient(90deg, var(--amber-dim) 0, var(--amber-dim) 18px, transparent 18px, transparent 36px);
@@ -201,14 +243,12 @@
     .tl-north { top: 20px; left: 50%; transform: translateX(-52px); }
     .tl-south { bottom: 20px; left: 50%; transform: translateX(30px); }
     .tl-east  { right: 20px; top: 50%; transform: translateY(-52px); }
-    .tl-west  { left: 20px; top: 50%; transform: translateY(30px); }
     .density-vis { position: absolute; display: flex; gap: 3px; align-items: center; }
     .density-vis.north { top: 4px; left: 50%; transform: translateX(8px); flex-direction: column; }
     .density-vis.south { bottom: 4px; left: 50%; transform: translateX(-18px); flex-direction: column-reverse; }
     .density-vis.east  { right: 4px; top: 50%; transform: translateY(8px); }
-    .density-vis.west  { left: 4px; top: 50%; transform: translateY(-18px); flex-direction: row-reverse; }
     .car-dot { width: 7px; height: 12px; border-radius: 2px; background: var(--blue); transition: opacity 0.5s; }
-    .density-vis.east .car-dot, .density-vis.west .car-dot { width: 12px; height: 7px; }
+    .density-vis.east .car-dot { width: 12px; height: 7px; }
     .car-dot.active { opacity: 0.85; }
     .car-dot.inactive { opacity: 0.08; }
     .controls { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; }
@@ -232,7 +272,73 @@
     }
     .metric-chip .val { font-family: var(--display); font-size: 1.3rem; color: var(--amber); display: block; }
     .metric-chip .lbl { font-family: var(--mono); font-size: 0.55rem; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.1em; }
-    .ai-panel { background: var(--surface); border-left: 1px solid var(--border); overflow-y: auto; display: flex; flex-direction: column; }
+    .control-badge {
+      font-family: var(--mono);
+      font-size: 0.58rem;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      border: 1px solid var(--border);
+      color: var(--text-dim);
+      padding: 6px 10px;
+      background: rgba(0, 180, 255, 0.04);
+    }
+    .control-badge.ai { border-color: var(--green); color: var(--green); }
+    .intersection-wrap.ai-active {
+      box-shadow: 0 0 0 1px rgba(0, 255, 136, 0.28), 0 0 30px rgba(0, 255, 136, 0.08);
+      border-radius: 10px;
+    }
+    .ops-wrap { width: min(720px, 100%); display: grid; grid-template-columns: 1fr 1fr; gap: 10px; z-index: 2; }
+    .ops-card { background: var(--surface); border: 1px solid var(--border); padding: 10px 12px; }
+    .ops-title { font-family: var(--mono); font-size: 0.56rem; letter-spacing: 0.12em; color: var(--text-dim); margin-bottom: 8px; text-transform: uppercase; }
+    .auto-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+    .tiny-btn {
+      font-family: var(--mono); font-size: 0.58rem; letter-spacing: 0.08em;
+      padding: 6px 10px; border: 1px solid var(--border); background: transparent;
+      color: var(--text-dim); cursor: pointer; text-transform: uppercase;
+    }
+    .tiny-btn:hover { border-color: var(--blue); color: var(--blue); }
+    .tiny-btn.active { border-color: var(--green); color: var(--green); }
+    .auto-status { font-family: var(--mono); font-size: 0.58rem; color: var(--text-dim); line-height: 1.6; }
+    .incident-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+    .incident-chip {
+      font-family: var(--mono); font-size: 0.6rem; letter-spacing: 0.06em;
+      border: 1px solid var(--border); background: rgba(0, 180, 255, 0.04);
+      color: var(--text-dim); padding: 7px 8px; cursor: pointer;
+    }
+    .incident-chip:hover { border-color: var(--amber); color: var(--amber); }
+    .incident-chip.active { border-color: var(--red); color: var(--red); background: rgba(255, 51, 85, 0.08); }
+    .history-box {
+      margin: 10px 18px 12px;
+      padding: 10px 12px;
+      border: 1px solid var(--border); background: rgba(0, 180, 255, 0.03);
+    }
+    .history-title { font-family: var(--mono); font-size: 0.56rem; color: var(--text-dim); letter-spacing: 0.12em; margin-bottom: 8px; text-transform: uppercase; }
+    .history-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px 10px; }
+    .history-item { font-family: var(--mono); font-size: 0.58rem; color: var(--text-dim); }
+    .history-item .v { color: var(--amber); margin-left: 6px; }
+    .history-actions { margin-top: 8px; display: flex; justify-content: flex-end; }
+    .ai-panel {
+      background: var(--surface);
+      border-left: 1px solid var(--border);
+      overflow: hidden;
+      overflow-x: hidden;
+      display: flex;
+      flex-direction: column;
+      min-height: 0;
+      height: 100%;
+      overscroll-behavior: contain;
+      -webkit-overflow-scrolling: touch;
+    }
+    .ai-panel > * { flex-shrink: 0; }
+    #aiContent {
+      flex: 0 1 auto;
+      min-height: 120px;
+      max-height: 38vh;
+      overflow-y: auto;
+      overflow-x: hidden;
+      margin: 0 6px 4px;
+      padding-right: 6px;
+    }
     .placeholder-text { padding: 32px 18px; font-family: var(--mono); font-size: 0.68rem; color: var(--text-dim); text-align: center; line-height: 2; }
     .placeholder-text .big { font-family: var(--display); font-size: 2.5rem; color: rgba(245,158,11,0.15); display: block; margin-bottom: 8px; }
     .ai-thinking { padding: 18px; font-family: var(--mono); font-size: 0.68rem; color: var(--text-dim); line-height: 1.9; }
@@ -268,7 +374,14 @@
       font-family: var(--mono); font-size: 0.6rem;
       color: var(--amber); line-height: 2; display: none;
     }
-    .log-section { flex: 1; display: flex; flex-direction: column; min-height: 0; }
+    .log-section {
+      flex: 1 1 260px;
+      display: flex;
+      flex-direction: column;
+      min-height: 220px;
+      border-top: 1px solid var(--border);
+      background: rgba(0, 0, 0, 0.08);
+    }
     .log-entries { padding: 6px 16px 16px; overflow-y: auto; flex: 1; }
     .log-entry { font-family: var(--mono); font-size: 0.6rem; padding: 4px 0; border-bottom: 1px solid rgba(30,58,95,0.25); display: flex; gap: 10px; }
     .log-entry .log-time { color: var(--amber-dim); flex-shrink: 0; }
@@ -280,6 +393,45 @@
     ::-webkit-scrollbar-track { background: transparent; }
     ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
     input[type=range] { width: 100%; accent-color: var(--amber); }
+
+    @media (max-width: 1220px) {
+      .main { grid-template-columns: 220px 1fr 260px; }
+      .intersection-wrap { width: 290px; height: 290px; }
+    }
+
+    @media (max-width: 980px) {
+      header { flex-wrap: wrap; gap: 10px; }
+      .header-right { width: 100%; justify-content: flex-end; flex-wrap: wrap; gap: 8px; }
+      .main {
+        grid-template-columns: 1fr;
+        grid-template-rows: auto auto auto;
+        height: calc(100vh - 88px);
+        overflow-y: auto;
+      }
+      .panel, .ai-panel, .intersection-panel {
+        border: none;
+        border-bottom: 1px solid var(--border);
+        max-height: none;
+      }
+      .intersection-panel { overflow-y: auto; justify-content: flex-start; }
+      .ops-wrap { grid-template-columns: 1fr; }
+      .history-box { margin-top: 10px; }
+      #aiContent { max-height: 34vh; }
+    }
+
+    @media (max-width: 640px) {
+      .logo { font-size: 1.4rem; }
+      .intersection-wrap { width: 250px; height: 250px; }
+      .road-h { left: 50%; right: 0; width: auto; height: 62px; }
+      .road-v { width: 62px; height: auto; }
+      .dash-h { left: 50%; right: 0; }
+      .controls { width: 100%; }
+      .btn { flex: 1; min-width: 90px; padding: 8px 10px; }
+      .metrics-row { width: 100%; }
+      .metric-chip { flex: 1; min-width: 72px; }
+      .incident-grid, .history-grid { grid-template-columns: 1fr; }
+      #aiContent { max-height: 30vh; }
+    }
   </style>
 </head>
 <body>
@@ -287,6 +439,8 @@
 <header>
   <div class="logo">Smart<span>Flow</span> <span style="font-size:0.7rem;color:var(--text-dim);letter-spacing:0.05em">AI TRAFFIC MANAGEMENT</span></div>
   <div class="header-right">
+    <button class="tiny-btn layout-toggle" id="btnSensorsPanel" onclick="toggleSensorsPanel()">SENSORS: ON</button>
+    <button class="tiny-btn layout-toggle" id="btnAIPanel" onclick="toggleAIPanel()">AI PANEL: ON</button>
     <div class="auto-badge" id="autoSimBadge">● AUTO SIM</div>
     <div class="lm-chip checking" id="lmChip" onclick="checkLMStudio()" title="Click to retry connection">⬡ LM STUDIO</div>
     <div class="status-chip online">SYSTEM ONLINE</div>
@@ -297,11 +451,14 @@
 <div class="main">
 
   <!-- LEFT: Lane Sensors -->
-  <div class="panel">
-    <div class="panel-title">// LANE SENSOR READINGS</div>
+  <div class="panel" id="sensorsPanel">
+    <div class="panel-title-row">
+      <div class="panel-title">// LANE SENSOR READINGS</div>
+      <button class="tiny-btn" onclick="toggleAllLaneCards()">TOGGLE LANES</button>
+    </div>
 
-    <div class="lane-card">
-      <div class="lane-header"><div class="lane-name">↓ NORTH LANE</div><div class="signal-dot red" id="sig-north"></div></div>
+    <div class="lane-card" id="lane-card-north">
+      <div class="lane-header"><div class="lane-name">↓ NORTH LANE</div><div class="lane-header-right"><div class="signal-dot red" id="sig-north"></div><button class="lane-fold-btn" id="lane-fold-north" onclick="toggleLaneCard('north')">COLLAPSE</button></div></div>
       <div class="density-row">
         <div class="density-label">DENSITY</div>
         <div class="density-bar-wrap"><div class="density-bar" id="bar-north"></div></div>
@@ -313,8 +470,8 @@
       </div>
     </div>
 
-    <div class="lane-card">
-      <div class="lane-header"><div class="lane-name">↑ SOUTH LANE</div><div class="signal-dot red" id="sig-south"></div></div>
+    <div class="lane-card" id="lane-card-south">
+      <div class="lane-header"><div class="lane-name">↑ SOUTH LANE</div><div class="lane-header-right"><div class="signal-dot red" id="sig-south"></div><button class="lane-fold-btn" id="lane-fold-south" onclick="toggleLaneCard('south')">COLLAPSE</button></div></div>
       <div class="density-row">
         <div class="density-label">DENSITY</div>
         <div class="density-bar-wrap"><div class="density-bar" id="bar-south"></div></div>
@@ -326,8 +483,8 @@
       </div>
     </div>
 
-    <div class="lane-card">
-      <div class="lane-header"><div class="lane-name">← EAST LANE</div><div class="signal-dot red" id="sig-east"></div></div>
+    <div class="lane-card" id="lane-card-east">
+      <div class="lane-header"><div class="lane-name">← EAST LANE</div><div class="lane-header-right"><div class="signal-dot red" id="sig-east"></div><button class="lane-fold-btn" id="lane-fold-east" onclick="toggleLaneCard('east')">COLLAPSE</button></div></div>
       <div class="density-row">
         <div class="density-label">DENSITY</div>
         <div class="density-bar-wrap"><div class="density-bar" id="bar-east"></div></div>
@@ -336,19 +493,6 @@
       <div class="lane-stats">
         <div class="lane-stat"><span class="val" id="count-east">--</span> <span class="lbl">VEHICLES</span></div>
         <div class="lane-stat"><span class="val" id="green-east">--</span>s <span class="lbl">GREEN</span></div>
-      </div>
-    </div>
-
-    <div class="lane-card">
-      <div class="lane-header"><div class="lane-name">→ WEST LANE</div><div class="signal-dot red" id="sig-west"></div></div>
-      <div class="density-row">
-        <div class="density-label">DENSITY</div>
-        <div class="density-bar-wrap"><div class="density-bar" id="bar-west"></div></div>
-        <div class="density-value" id="pct-west">--%</div>
-      </div>
-      <div class="lane-stats">
-        <div class="lane-stat"><span class="val" id="count-west">--</span> <span class="lbl">VEHICLES</span></div>
-        <div class="lane-stat"><span class="val" id="green-west">--</span>s <span class="lbl">GREEN</span></div>
       </div>
     </div>
 
@@ -370,11 +514,9 @@
       <div class="tl tl-north"><div class="tl-light active-red" id="tln-r"></div><div class="tl-light" id="tln-y"></div><div class="tl-light" id="tln-g"></div></div>
       <div class="tl tl-south"><div class="tl-light active-red" id="tls-r"></div><div class="tl-light" id="tls-y"></div><div class="tl-light" id="tls-g"></div></div>
       <div class="tl tl-east"> <div class="tl-light active-red" id="tle-r"></div><div class="tl-light" id="tle-y"></div><div class="tl-light" id="tle-g"></div></div>
-      <div class="tl tl-west"> <div class="tl-light active-red" id="tlw-r"></div><div class="tl-light" id="tlw-y"></div><div class="tl-light" id="tlw-g"></div></div>
       <div class="density-vis north" id="dots-north"></div>
       <div class="density-vis south" id="dots-south"></div>
       <div class="density-vis east"  id="dots-east"></div>
-      <div class="density-vis west"  id="dots-west"></div>
     </div>
 
     <div class="controls">
@@ -383,23 +525,61 @@
       <button class="btn btn-danger"             onclick="resetSystem()">↺ RESET</button>
     </div>
 
+    <div class="control-badge" id="controlModeBadge">CONTROL: AUTO FIXED</div>
+
     <div class="metrics-row">
       <div class="metric-chip"><span class="val" id="metricTotal">--</span><span class="lbl">Vehicles</span></div>
       <div class="metric-chip"><span class="val" id="metricEff">--</span><span class="lbl">Efficiency %</span></div>
       <div class="metric-chip"><span class="val" id="metricOpts">0</span><span class="lbl">Optimizations</span></div>
       <div class="metric-chip"><span class="val" id="metricSaved">0s</span><span class="lbl">Time Saved</span></div>
+      <div class="metric-chip"><span class="val" id="metricTemp">--°C</span><span class="lbl">Temperature</span></div>
+      <div class="metric-chip"><span class="val" id="metricHum">--%</span><span class="lbl">Humidity</span></div>
+    </div>
+
+    <div class="ops-wrap">
+      <div class="ops-card">
+        <div class="ops-title">Auto Optimize</div>
+        <div class="auto-row">
+          <button class="tiny-btn" id="btnAutoOpt" onclick="toggleAutoOptimize()">AUTO OPT: OFF</button>
+          <button class="tiny-btn" onclick="runOptimize()">RUN NOW</button>
+        </div>
+        <div class="auto-status" id="autoOptStatus">Waiting for simulation start.</div>
+      </div>
+      <div class="ops-card">
+        <div class="ops-title">Incident Injection</div>
+        <div class="incident-grid">
+          <button class="incident-chip" id="incident-north" onclick="setIncident('north')">NORTH INCIDENT</button>
+          <button class="incident-chip" id="incident-south" onclick="setIncident('south')">SOUTH INCIDENT</button>
+          <button class="incident-chip" id="incident-east" onclick="setIncident('east')">EAST INCIDENT</button>
+        </div>
+      </div>
     </div>
   </div>
 
   <!-- RIGHT: AI Panel -->
-  <div class="ai-panel">
-    <div class="panel-title">// AI ENGINE · DeepSeek R1 (Local)</div>
+  <div class="ai-panel" id="aiPanel">
+    <div class="panel-title-row">
+      <div class="panel-title">// AI ENGINE · Gemma 3 4B (Local)</div>
+      <button class="tiny-btn" onclick="toggleAIPanel()">COLLAPSE</button>
+    </div>
     <div class="lm-notice" id="lmNotice">
       ⚠ LM STUDIO NOT DETECTED<br>
       1. Open LM Studio<br>
-      2. Load DeepSeek R1 0528 Qwen3 8B<br>
+      2. Load Gemma 3 4B (or any chat model)<br>
       3. Developer tab → Start Server<br>
       4. Click ⬡ chip above to retry
+    </div>
+    <div class="history-box">
+      <div class="history-title">Run History</div>
+      <div class="history-grid">
+        <div class="history-item">Runs <span class="v" id="hist-runs">0</span></div>
+        <div class="history-item">Best <span class="v" id="hist-best">--%</span></div>
+        <div class="history-item">Average <span class="v" id="hist-avg">--%</span></div>
+        <div class="history-item">Last <span class="v" id="hist-last">--</span></div>
+      </div>
+      <div class="history-actions">
+        <button class="tiny-btn" onclick="clearHistory()">CLEAR HISTORY</button>
+      </div>
     </div>
     <div id="aiContent">
       <div class="placeholder-text">
@@ -418,285 +598,1168 @@
 </div>
 
 <script>
-  const lanes = ['north','south','east','west'];
-  const TL_PREFIX = {north:'tln', south:'tls', east:'tle', west:'tlw'};
-  const LM_URL = 'http://localhost:1234/v1/chat/completions';
+  const LANES = ['north', 'south', 'east'];
+  const TL_PREFIX = { north: 'tln', south: 'tls', east: 'tle' };
+  const LANE_SHORT = { north: '↓ N', south: '↑ S', east: '← E' };
 
-  let densities = {north:60, south:30, east:75, west:45};
-  let timings   = {north:null, south:null, east:null, west:null};
-  let simRunning = false, simInterval = null;
-  let optimizeCount = 0, totalSaved = 0;
-  let cycleTimeouts = [];
-  let lmConnected = false;
+  const LM_URL = '/v1/chat/completions';
+  const LM_MODEL = 'google/gemma-3-4b';
+  const SERVER_SENSOR_URL = '/sensor-data';
+  const SERVER_COMMAND_URL = '/command';
+  const SERVER_OPTIMIZE_URL = '/optimize';
+  const HISTORY_KEY = 'smartflow.runHistory.v1';
 
-  // ─── LM Studio health check ───────────────────────────────
-  async function checkLMStudio() {
-    const chip = document.getElementById('lmChip');
-    chip.className = 'lm-chip checking';
-    chip.textContent = '⬡ CHECKING...';
+  const DEFAULT_DENSITIES = { north: 42, south: 34, east: 48 };
+  const DEFAULT_TIMINGS = { north: 24, south: 22, east: 26 };
+
+  const ui = {
+    aiContent: document.getElementById('aiContent'),
+    lmChip: document.getElementById('lmChip'),
+    lmNotice: document.getElementById('lmNotice'),
+    autoSimBadge: document.getElementById('autoSimBadge'),
+    btnSim: document.getElementById('btnSim'),
+    btnOpt: document.getElementById('btnOpt'),
+    simSpeed: document.getElementById('simSpeed'),
+    speedLabel: document.getElementById('speedLabel'),
+    metricTotal: document.getElementById('metricTotal'),
+    metricEff: document.getElementById('metricEff'),
+    metricOpts: document.getElementById('metricOpts'),
+    metricSaved: document.getElementById('metricSaved'),
+    metricTemp: document.getElementById('metricTemp'),
+    metricHum: document.getElementById('metricHum'),
+    btnAutoOpt: document.getElementById('btnAutoOpt'),
+    autoOptStatus: document.getElementById('autoOptStatus'),
+    histRuns: document.getElementById('hist-runs'),
+    histBest: document.getElementById('hist-best'),
+    histAvg: document.getElementById('hist-avg'),
+    histLast: document.getElementById('hist-last'),
+    controlModeBadge: document.getElementById('controlModeBadge'),
+    logEntries: document.getElementById('logEntries'),
+    clock: document.getElementById('clockDisplay'),
+    main: document.querySelector('.main'),
+    intersectionWrap: document.querySelector('.intersection-wrap'),
+    sensorsPanel: document.getElementById('sensorsPanel'),
+    aiPanel: document.getElementById('aiPanel'),
+    btnSensorsPanel: document.getElementById('btnSensorsPanel'),
+    btnAIPanel: document.getElementById('btnAIPanel')
+  };
+
+  const state = {
+    laneQueues: {},
+    densities: {},
+    timings: { ...DEFAULT_TIMINGS },
+    priorityLane: 'east',
+    controlMode: 'AUTO',
+    efficiency: 78,
+    reasoning: 'Initial balanced fixed-time cycle loaded.',
+    planSource: 'LOCAL',
+    tempC: null,
+    humidity: null,
+    simRunning: false,
+    optimizing: false,
+    lmConnected: false,
+    autoOptimize: false,
+    lastOptimizeAt: 0,
+    minAutoOptimizeGapMs: 7000,
+    aiIndicatorTimeoutMs: 10000,
+    incidents: { north: 0, south: 0, east: 0 },
+    laneCollapsed: { north: false, south: false, east: false },
+    panelVisible: { sensors: true, ai: true },
+    history: [],
+    simInterval: null,
+    aiModeTimeoutId: null,
+    phaseTimeouts: [],
+    signalToken: 0,
+    signalPhase: { lane: null, state: 'red' },
+    stats: {
+      optimizations: 0,
+      totalSavedSeconds: 0,
+      totalArrivals: 0,
+      totalDepartures: 0
+    },
+    liveSync: {
+      enabled: true,
+      online: false,
+      intervalId: null,
+      pollMs: 2200,
+      lastCommandSignature: '',
+      signalRunning: false
+    }
+  };
+
+  function clamp(n, min, max) {
+    return Math.max(min, Math.min(max, n));
+  }
+
+  function nowMs() {
+    return Date.now();
+  }
+
+  function getSpeed() {
+    return parseInt(ui.simSpeed.value, 10) || 3;
+  }
+
+  function getSpeedScaledMs(baseMs, minMs) {
+    return Math.max(minMs, Math.round(baseMs / getSpeed()));
+  }
+
+  function queueToDensity(queue) {
+    return clamp(Math.round(queue * 1.55), 5, 100);
+  }
+
+  function densityToVehicles(density) {
+    return Math.round(density * 0.35);
+  }
+
+  function densityColor(pct) {
+    return pct > 70 ? '#ff3355' : pct > 45 ? '#ffdd00' : '#00ff88';
+  }
+
+  function addLog(msg, type = 'default') {
+    const t = new Date().toTimeString().slice(0, 8);
+    const e = document.createElement('div');
+    e.className = `log-entry ${type}`;
+    e.innerHTML = `<span class="log-time">${t}</span><span class="log-msg">${msg}</span>`;
+    ui.logEntries.insertBefore(e, ui.logEntries.firstChild);
+    if (ui.logEntries.children.length > 40) ui.logEntries.removeChild(ui.logEntries.lastChild);
+  }
+
+  function loadHistory() {
     try {
-      const res = await fetch('http://localhost:1234/v1/models', {
-        signal: AbortSignal.timeout(3000)
-      });
-      if (res.ok) {
-        lmConnected = true;
-        chip.className = 'lm-chip connected';
-        chip.textContent = '⬡ LM STUDIO';
-        document.getElementById('lmNotice').style.display = 'none';
-        addLog('LM Studio connected on localhost:1234', 'success');
-        addLog('DeepSeek R1 ready for optimization', 'info');
-      } else throw new Error('bad status');
+      const parsed = JSON.parse(localStorage.getItem(HISTORY_KEY) || '[]');
+      if (Array.isArray(parsed)) {
+        state.history = parsed.filter(item => item && typeof item === 'object').slice(-50);
+      }
     } catch {
-      lmConnected = false;
-      chip.className = 'lm-chip disconnected';
-      chip.textContent = '⬡ LM OFFLINE';
-      document.getElementById('lmNotice').style.display = 'block';
-      addLog('LM Studio not found — click ⬡ chip to retry', 'warn');
+      state.history = [];
     }
   }
 
-  // ─── UI helpers ───────────────────────────────────────────
-  const densityColor = p => p > 70 ? '#ff3355' : p > 45 ? '#ffdd00' : '#00ff88';
+  function saveHistory() {
+    localStorage.setItem(HISTORY_KEY, JSON.stringify(state.history.slice(-50)));
+  }
 
-  function updateLaneUI(lane) {
-    const p = Math.round(densities[lane]);
-    document.getElementById(`bar-${lane}`).style.width = p + '%';
-    document.getElementById(`bar-${lane}`).style.background = densityColor(p);
-    document.getElementById(`pct-${lane}`).textContent = p + '%';
-    document.getElementById(`count-${lane}`).textContent = Math.round(p * 0.35);
-    const total = lanes.reduce((a,l) => a + Math.round(densities[l]*0.35), 0);
-    document.getElementById('metricTotal').textContent = total;
+  function renderHistory() {
+    const runs = state.history.length;
+    ui.histRuns.textContent = String(runs);
+    if (!runs) {
+      ui.histBest.textContent = '--%';
+      ui.histAvg.textContent = '--%';
+      ui.histLast.textContent = '--';
+      return;
+    }
+
+    const eff = state.history.map(h => clamp(parseInt(h.efficiency, 10) || 0, 0, 100));
+    const best = Math.max(...eff);
+    const avg = Math.round(eff.reduce((a, b) => a + b, 0) / runs);
+    const last = state.history[runs - 1];
+
+    ui.histBest.textContent = `${best}%`;
+    ui.histAvg.textContent = `${avg}%`;
+    ui.histLast.textContent = `${(last.source || 'LOCAL').toUpperCase()} ${clamp(parseInt(last.efficiency, 10) || 0, 0, 100)}%`;
+  }
+
+  function pushHistory(plan) {
+    state.history.push({
+      at: new Date().toISOString(),
+      source: plan.source,
+      efficiency: plan.efficiency,
+      priority_lane: plan.priority_lane,
+      timings: { ...plan.timings }
+    });
+    if (state.history.length > 50) state.history = state.history.slice(-50);
+    saveHistory();
+    renderHistory();
+  }
+
+  function clearHistory() {
+    state.history = [];
+    saveHistory();
+    renderHistory();
+    addLog('Optimization history cleared', 'warn');
+  }
+
+  function syncMainColumns() {
+    if (window.innerWidth <= 980) return;
+
+    if (state.panelVisible.sensors && state.panelVisible.ai) {
+      ui.main.style.gridTemplateColumns = '260px 1fr 290px';
+    } else if (state.panelVisible.sensors && !state.panelVisible.ai) {
+      ui.main.style.gridTemplateColumns = '260px 1fr';
+    } else if (!state.panelVisible.sensors && state.panelVisible.ai) {
+      ui.main.style.gridTemplateColumns = '1fr 290px';
+    } else {
+      ui.main.style.gridTemplateColumns = '1fr';
+    }
+  }
+
+  function syncPanelUI() {
+    ui.sensorsPanel.classList.toggle('hidden', !state.panelVisible.sensors);
+    ui.aiPanel.classList.toggle('hidden', !state.panelVisible.ai);
+    ui.btnSensorsPanel.textContent = `SENSORS: ${state.panelVisible.sensors ? 'ON' : 'OFF'}`;
+    ui.btnAIPanel.textContent = `AI PANEL: ${state.panelVisible.ai ? 'ON' : 'OFF'}`;
+    ui.btnSensorsPanel.classList.toggle('active', state.panelVisible.sensors);
+    ui.btnAIPanel.classList.toggle('active', state.panelVisible.ai);
+    syncMainColumns();
+  }
+
+  function toggleSensorsPanel() {
+    state.panelVisible.sensors = !state.panelVisible.sensors;
+    syncPanelUI();
+    addLog(`Sensor panel ${state.panelVisible.sensors ? 'expanded' : 'collapsed'}`, 'info');
+  }
+
+  function toggleAIPanel() {
+    state.panelVisible.ai = !state.panelVisible.ai;
+    syncPanelUI();
+    addLog(`AI panel ${state.panelVisible.ai ? 'expanded' : 'collapsed'}`, 'info');
+  }
+
+  function syncLaneCardUI(lane) {
+    const card = document.getElementById(`lane-card-${lane}`);
+    const btn = document.getElementById(`lane-fold-${lane}`);
+    const collapsed = !!state.laneCollapsed[lane];
+    card.classList.toggle('collapsed', collapsed);
+    btn.textContent = collapsed ? 'EXPAND' : 'COLLAPSE';
+  }
+
+  function toggleLaneCard(lane) {
+    if (!LANES.includes(lane)) return;
+    state.laneCollapsed[lane] = !state.laneCollapsed[lane];
+    syncLaneCardUI(lane);
+  }
+
+  function toggleAllLaneCards() {
+    const collapseAll = LANES.some(lane => !state.laneCollapsed[lane]);
+    LANES.forEach(lane => {
+      state.laneCollapsed[lane] = collapseAll;
+      syncLaneCardUI(lane);
+    });
+  }
+
+  function updateClock() {
+    ui.clock.textContent = new Date().toTimeString().slice(0, 8);
+  }
+
+  function syncControlModeUI() {
+    const label = state.controlMode === 'AI'
+      ? 'AI ADAPTIVE'
+      : state.controlMode === 'LOCAL'
+        ? 'LOCAL OPT'
+        : 'AUTO FIXED';
+    ui.controlModeBadge.textContent = `CONTROL: ${label}`;
+    ui.controlModeBadge.classList.toggle('ai', state.controlMode === 'AI');
+    ui.intersectionWrap.classList.toggle('ai-active', state.controlMode === 'AI');
+  }
+
+  function clearAIModeTimeout() {
+    if (state.aiModeTimeoutId) {
+      clearTimeout(state.aiModeTimeoutId);
+      state.aiModeTimeoutId = null;
+    }
+  }
+
+  function armAIModeTimeout() {
+    clearAIModeTimeout();
+    const timeoutMs = getSpeedScaledMs(state.aiIndicatorTimeoutMs, 2500);
+    state.aiModeTimeoutId = setTimeout(() => {
+      if (state.controlMode === 'AI') {
+        state.controlMode = 'AUTO';
+        syncControlModeUI();
+        addLog(`AI control indicator auto-disabled after ${Math.round(timeoutMs / 1000)}s`, 'info');
+      }
+      state.aiModeTimeoutId = null;
+    }, timeoutMs);
+  }
+
+  function setSignal(lane, color) {
+    const p = TL_PREFIX[lane];
+    ['r', 'y', 'g'].forEach((light, i) => {
+      const el = document.getElementById(`${p}-${light}`);
+      el.className = 'tl-light';
+      if (['red', 'yellow', 'green'][i] === color) el.className = `tl-light active-${color}`;
+    });
+    document.getElementById(`sig-${lane}`).className = `signal-dot ${color}`;
+  }
+
+  function allRed() {
+    LANES.forEach(lane => setSignal(lane, 'red'));
+    state.signalPhase = { lane: null, state: 'red' };
   }
 
   function updateDots(lane) {
     const el = document.getElementById(`dots-${lane}`);
-    const count = Math.ceil(densities[lane] / 20);
+    const count = Math.ceil(state.densities[lane] / 20);
     el.innerHTML = '';
     for (let i = 0; i < 5; i++) {
       const d = document.createElement('div');
-      d.className = 'car-dot ' + (i < count ? 'active' : 'inactive');
+      d.className = `car-dot ${i < count ? 'active' : 'inactive'}`;
       el.appendChild(d);
     }
   }
 
-  function setSignal(lane, state) {
-    const p = TL_PREFIX[lane];
-    ['r','y','g'].forEach((l, i) => {
-      const el = document.getElementById(`${p}-${l}`);
-      el.className = 'tl-light';
-      if (state === ['red','yellow','green'][i]) el.className = `tl-light active-${state}`;
-    });
-    document.getElementById(`sig-${lane}`).className = `signal-dot ${state}`;
+  function updateLaneUI(lane) {
+    const density = Math.round(state.densities[lane]);
+    document.getElementById(`bar-${lane}`).style.width = `${density}%`;
+    document.getElementById(`bar-${lane}`).style.background = densityColor(density);
+    document.getElementById(`pct-${lane}`).textContent = `${density}%`;
+    document.getElementById(`count-${lane}`).textContent = densityToVehicles(density);
+    document.getElementById(`green-${lane}`).textContent = state.timings[lane];
+    updateDots(lane);
   }
 
-  const allRed = () => lanes.forEach(l => setSignal(l, 'red'));
-
-  // ─── Clock ────────────────────────────────────────────────
-  setInterval(() => {
-    document.getElementById('clockDisplay').textContent = new Date().toTimeString().slice(0,8);
-  }, 1000);
-  document.getElementById('clockDisplay').textContent = new Date().toTimeString().slice(0,8);
-
-  // ─── Log ──────────────────────────────────────────────────
-  function addLog(msg, type = 'default') {
-    const log = document.getElementById('logEntries');
-    const t = new Date().toTimeString().slice(0,8);
-    const e = document.createElement('div');
-    e.className = `log-entry ${type}`;
-    e.innerHTML = `<span class="log-time">${t}</span><span class="log-msg">${msg}</span>`;
-    log.insertBefore(e, log.firstChild);
-    if (log.children.length > 30) log.removeChild(log.lastChild);
+  function computeLiveEfficiency() {
+    const flow = state.stats.totalDepartures / Math.max(1, state.stats.totalArrivals);
+    const totalVehicles = LANES.reduce((sum, lane) => sum + densityToVehicles(state.densities[lane]), 0);
+    const queuePenalty = clamp((totalVehicles / 150) * 28, 0, 28);
+    const blended = state.efficiency * 0.65 + (flow * 100 - queuePenalty + 18) * 0.35;
+    return clamp(Math.round(blended), 30, 99);
   }
 
-  // ─── Simulation ───────────────────────────────────────────
-  function toggleSim() {
-    simRunning = !simRunning;
-    const btn = document.getElementById('btnSim');
-    const badge = document.getElementById('autoSimBadge');
-    if (simRunning) {
-      btn.textContent = '⏸ PAUSE SIM';
-      badge.style.display = 'inline-flex';
-      addLog('Traffic simulation started', 'info');
-      startSimLoop();
-    } else {
-      btn.textContent = '▶ START SIM';
-      badge.style.display = 'none';
-      clearInterval(simInterval);
-      addLog('Simulation paused', 'warn');
+  function updateMetrics() {
+    const totalVehicles = LANES.reduce((sum, lane) => sum + densityToVehicles(state.densities[lane]), 0);
+    ui.metricTotal.textContent = totalVehicles;
+    ui.metricEff.textContent = computeLiveEfficiency();
+    ui.metricOpts.textContent = state.stats.optimizations;
+    ui.metricSaved.textContent = `${state.stats.totalSavedSeconds}s`;
+    ui.metricTemp.textContent = Number.isFinite(state.tempC) ? `${state.tempC.toFixed(1)}°C` : '--°C';
+    ui.metricHum.textContent = Number.isFinite(state.humidity) ? `${Math.round(state.humidity)}%` : '--%';
+  }
+
+  function updateAutoOptimizeStatus(extra = '') {
+    if (!state.autoOptimize) {
+      ui.autoOptStatus.textContent = 'Auto optimize disabled.';
+      return;
     }
+    const effectiveGapMs = getSpeedScaledMs(state.minAutoOptimizeGapMs, 2000);
+    const since = Math.max(0, nowMs() - state.lastOptimizeAt);
+    const remain = Math.max(0, Math.ceil((effectiveGapMs - since) / 1000));
+    ui.autoOptStatus.textContent = extra || (remain > 0
+      ? `Armed. Cooldown ${remain}s before next AI trigger.`
+      : 'Armed. Waiting for congestion spike.');
   }
 
-  function startSimLoop() {
-    clearInterval(simInterval);
-    const speed = parseInt(document.getElementById('simSpeed').value);
-    simInterval = setInterval(() => {
-      lanes.forEach(lane => {
-        densities[lane] = Math.min(100, Math.max(5, densities[lane] + (Math.random() - 0.42) * 14));
-        updateLaneUI(lane);
-        updateDots(lane);
-      });
-    }, Math.max(400, 2200 / speed));
+  function updateIncidentUI() {
+    LANES.forEach(lane => {
+      const el = document.getElementById(`incident-${lane}`);
+      const level = state.incidents[lane];
+      el.classList.toggle('active', level >= 0.35);
+      if (level >= 1.2) el.textContent = `${lane.toUpperCase()} GRIDLOCK`;
+      else if (level >= 0.35) el.textContent = `${lane.toUpperCase()} INCIDENT`;
+      else el.textContent = `${lane.toUpperCase()} INCIDENT`;
+    });
   }
 
-  document.getElementById('simSpeed').addEventListener('input', function() {
-    document.getElementById('speedLabel').textContent = `SPEED: ${this.value}x`;
-    if (simRunning) startSimLoop();
-  });
-
-  function resetSystem() {
-    simRunning = false;
-    clearInterval(simInterval);
-    cycleTimeouts.forEach(clearTimeout); cycleTimeouts = [];
-    document.getElementById('btnSim').textContent = '▶ START SIM';
-    document.getElementById('autoSimBadge').style.display = 'none';
-    densities = {north:60, south:30, east:75, west:45};
-    timings   = {north:null, south:null, east:null, west:null};
-    lanes.forEach(l => { setSignal(l,'red'); updateLaneUI(l); updateDots(l); document.getElementById(`green-${l}`).textContent = '--'; });
-    document.getElementById('metricEff').textContent = '--';
-    document.getElementById('metricOpts').textContent = '0';
-    document.getElementById('metricSaved').textContent = '0s';
-    optimizeCount = 0; totalSaved = 0;
-    document.getElementById('aiContent').innerHTML = `<div class="placeholder-text"><span class="big">AI</span>SYSTEM RESET<br>READY FOR NEW SESSION</div>`;
-    addLog('System reset complete', 'warn');
+  function syncLanePanels() {
+    LANES.forEach(updateLaneUI);
+    updateMetrics();
   }
 
-  // ─── Signal cycle (scaled for demo visibility) ────────────
-  function runSignalCycle(priority, timingsObj) {
-    cycleTimeouts.forEach(clearTimeout); cycleTimeouts = [];
+  function resetLaneState() {
+    LANES.forEach(lane => {
+      state.densities[lane] = DEFAULT_DENSITIES[lane];
+      state.laneQueues[lane] = clamp(DEFAULT_DENSITIES[lane] / 1.55, 3, 85);
+    });
+  }
+
+  function clearSignalTimers() {
+    state.signalToken++;
+    state.phaseTimeouts.forEach(clearTimeout);
+    state.phaseTimeouts = [];
+    state.liveSync.signalRunning = false;
+  }
+
+  function schedulePhase(callback, delayMs) {
+    const id = setTimeout(() => {
+      state.phaseTimeouts = state.phaseTimeouts.filter(t => t !== id);
+      callback();
+    }, delayMs);
+    state.phaseTimeouts.push(id);
+  }
+
+  function buildCycleOrder() {
+    if (state.controlMode === 'AUTO') {
+      return [...LANES];
+    }
+
+    const priority = LANES.includes(state.priorityLane)
+      ? state.priorityLane
+      : [...LANES].sort((a, b) => state.densities[b] - state.densities[a])[0];
+    const others = LANES
+      .filter(lane => lane !== priority)
+      .sort((a, b) => state.densities[b] - state.densities[a]);
+    return [priority, ...others];
+  }
+
+  function selectNextLaneByCongestion() {
+    const ranked = [...LANES].sort((a, b) => {
+      const diff = (state.densities[b] || 0) - (state.densities[a] || 0);
+      if (diff !== 0) return diff;
+      if (b === state.priorityLane) return 1;
+      if (a === state.priorityLane) return -1;
+      return 0;
+    });
+    return ranked[0] || LANES[0];
+  }
+
+  function areLaneDensitiesEqual(tolerance = 1) {
+    const values = LANES.map(lane => Math.round(state.densities[lane] || 0));
+    const maxV = Math.max(...values);
+    const minV = Math.min(...values);
+    return maxV - minV <= tolerance;
+  }
+
+  function selectNextLaneInRotation() {
+    const lastLane = state.signalPhase?.lane;
+    const idx = LANES.indexOf(lastLane);
+    if (idx < 0) return LANES[0];
+    return LANES[(idx + 1) % LANES.length];
+  }
+
+  function getEqualGreenSeconds() {
+    const avg = Math.round(
+      LANES.reduce((sum, lane) => sum + clamp(parseInt(state.timings[lane], 10) || DEFAULT_TIMINGS[lane], 10, 50), 0) / LANES.length
+    );
+    return clamp(avg, 10, 50);
+  }
+
+  function startSignalProgram() {
+    clearSignalTimers();
     allRed();
-    const order = [priority, ...lanes.filter(l => l !== priority)];
-    const SCALE = 500;   // ms per timing second — bump up if too fast
-    const YELLOW = 1200; // ms for yellow phase
-    let delay = 0;
-    order.forEach(lane => {
-      const greenMs = (timingsObj[lane] || 20) * SCALE;
-      cycleTimeouts.push(
-        setTimeout(() => { allRed(); setSignal(lane,'yellow'); setTimeout(() => setSignal(lane,'green'), YELLOW); }, delay),
-        setTimeout(() => { setSignal(lane,'yellow'); setTimeout(() => setSignal(lane,'red'), YELLOW); }, delay + greenMs + YELLOW)
-      );
-      delay += greenMs + YELLOW * 2 + 400;
-    });
+
+    if (!state.simRunning) return;
+
+    const token = state.signalToken;
+    const runLane = () => {
+      if (token !== state.signalToken || !state.simRunning) return;
+
+      const equalMode = areLaneDensitiesEqual();
+      const lane = equalMode ? selectNextLaneInRotation() : selectNextLaneByCongestion();
+      const speed = getSpeed();
+      const msPerSignalSecond = Math.max(85, 350 / speed);
+      const yellowMs = Math.max(260, Math.round(490 / speed));
+      const greenSeconds = equalMode ? getEqualGreenSeconds() : clamp(state.timings[lane], 10, 50);
+      const greenMs = greenSeconds * msPerSignalSecond;
+
+      allRed();
+      state.signalPhase = { lane, state: 'yellow' };
+      setSignal(lane, 'yellow');
+
+      schedulePhase(() => {
+        if (token !== state.signalToken || !state.simRunning) return;
+        state.signalPhase = { lane, state: 'green' };
+        setSignal(lane, 'green');
+
+        schedulePhase(() => {
+          if (token !== state.signalToken || !state.simRunning) return;
+          state.signalPhase = { lane, state: 'yellow' };
+          setSignal(lane, 'yellow');
+
+          schedulePhase(() => {
+            if (token !== state.signalToken || !state.simRunning) return;
+            setSignal(lane, 'red');
+            runLane();
+          }, yellowMs);
+        }, greenMs);
+      }, yellowMs);
+    };
+
+    runLane();
   }
 
-  // ─── AI Optimize via LM Studio ───────────────────────────
-  async function runOptimize() {
-    if (!lmConnected) {
-      await checkLMStudio();
-      if (!lmConnected) { addLog('Cannot optimize — start LM Studio first', 'warn'); return; }
+  function startLiveSignalProgram() {
+    if (state.liveSync.signalRunning) return;
+
+    clearSignalTimers();
+    allRed();
+
+    if (!state.liveSync.online || state.simRunning) return;
+
+    state.liveSync.signalRunning = true;
+
+    const token = state.signalToken;
+    const runLane = () => {
+      if (token !== state.signalToken || !state.liveSync.online || state.simRunning) return;
+
+      const equalMode = areLaneDensitiesEqual();
+      const lane = equalMode ? selectNextLaneInRotation() : selectNextLaneByCongestion();
+      const yellowMs = 450;
+      const greenSeconds = equalMode ? getEqualGreenSeconds() : clamp(state.timings[lane], 10, 50);
+      const greenMs = greenSeconds * 225;
+
+      allRed();
+      state.signalPhase = { lane, state: 'yellow' };
+      setSignal(lane, 'yellow');
+
+      schedulePhase(() => {
+        if (token !== state.signalToken || !state.liveSync.online || state.simRunning) return;
+        state.signalPhase = { lane, state: 'green' };
+        setSignal(lane, 'green');
+
+        schedulePhase(() => {
+          if (token !== state.signalToken || !state.liveSync.online || state.simRunning) return;
+          state.signalPhase = { lane, state: 'yellow' };
+          setSignal(lane, 'yellow');
+
+          schedulePhase(() => {
+            if (token !== state.signalToken || !state.liveSync.online || state.simRunning) return;
+            setSignal(lane, 'red');
+            runLane();
+          }, yellowMs);
+        }, greenMs);
+      }, yellowMs);
+    };
+
+    runLane();
+  }
+
+  function runSimulationStep() {
+    const speed = getSpeed();
+    const greenLane = state.signalPhase.state === 'green' ? state.signalPhase.lane : null;
+    const totalDensity = LANES.reduce((sum, lane) => sum + state.densities[lane], 0) || 1;
+    const totalTiming = LANES.reduce((sum, lane) => sum + state.timings[lane], 0) || 1;
+    const adaptive = state.controlMode !== 'AUTO';
+    let arrivalsTick = 0;
+    let departuresTick = 0;
+
+    LANES.forEach(lane => {
+      const density = state.densities[lane];
+      const demandBias = lane === state.priorityLane ? 1.08 : 1;
+      const incidentLevel = state.incidents[lane];
+      const incidentArrivalBoost = 1 + incidentLevel * 0.8;
+      const arrivalNoise = adaptive ? Math.random() * 0.4 : Math.random() * 0.58;
+      const arrival = (0.22 + density / 190 + arrivalNoise) * (0.9 + speed * 0.08) * demandBias * incidentArrivalBoost;
+
+      const demandShare = state.densities[lane] / totalDensity;
+      const timingShare = state.timings[lane] / totalTiming;
+      const deficit = demandShare - timingShare;
+      const adaptiveBoost = adaptive ? 1 + clamp(deficit * 2.4, -0.22, 0.55) + (lane === state.priorityLane ? 0.14 : 0) : 1;
+
+      let departure = 0;
+      if (greenLane === lane) {
+        departure = (5.9 + speed * 0.92 + Math.random() * 1.7) * (1 - incidentLevel * 0.48) * adaptiveBoost;
+      } else if (state.signalPhase.state === 'yellow' && state.signalPhase.lane === lane) {
+        departure = (0.35 + Math.random() * 0.3) * (1 - incidentLevel * 0.42) * (adaptive ? 1.06 : 1);
+      } else {
+        departure = 0.08 + Math.random() * 0.1;
+      }
+
+      state.laneQueues[lane] = clamp(state.laneQueues[lane] + arrival - departure, 2, 90);
+      state.densities[lane] = queueToDensity(state.laneQueues[lane]);
+      state.incidents[lane] = clamp(state.incidents[lane] * 0.988, 0, 2);
+      arrivalsTick += arrival;
+      departuresTick += Math.min(state.laneQueues[lane], departure);
+    });
+
+    state.stats.totalArrivals += arrivalsTick;
+    state.stats.totalDepartures += departuresTick;
+    updateIncidentUI();
+    syncLanePanels();
+
+    if (state.autoOptimize && state.simRunning && !state.optimizing) {
+      const totalVehicles = LANES.reduce((sum, lane) => sum + densityToVehicles(state.densities[lane]), 0);
+      const spread = Math.max(...LANES.map(l => state.densities[l])) - Math.min(...LANES.map(l => state.densities[l]));
+      const incidentPeak = Math.max(...LANES.map(l => state.incidents[l]));
+      const shouldOptimize = spread >= 22 || totalVehicles >= 95 || incidentPeak >= 0.55;
+      const effectiveGapMs = getSpeedScaledMs(state.minAutoOptimizeGapMs, 2000);
+
+      if (shouldOptimize && nowMs() - state.lastOptimizeAt >= effectiveGapMs) {
+        addLog('Auto optimizer triggered by live congestion pattern', 'info');
+        runOptimize();
+      } else {
+        updateAutoOptimizeStatus();
+      }
     }
+  }
 
-    const btn = document.getElementById('btnOpt');
-    btn.disabled = true;
-    btn.textContent = '⏳ ANALYZING...';
-    addLog('Sending sensor data to DeepSeek R1...', 'info');
+  function startSimulationLoop() {
+    clearInterval(state.simInterval);
+    state.simInterval = setInterval(runSimulationStep, Math.max(260, 1300 / getSpeed()));
+  }
 
-    document.getElementById('aiContent').innerHTML = `
+  function estimateSavedSeconds(newTimings, previousTimings) {
+    const previous = previousTimings || DEFAULT_TIMINGS;
+    const totalDensity = LANES.reduce((sum, lane) => sum + state.densities[lane], 0) || 1;
+    const totalPrev = LANES.reduce((sum, lane) => sum + previous[lane], 0) || 1;
+    const totalNew = LANES.reduce((sum, lane) => sum + newTimings[lane], 0) || 1;
+
+    const mismatchScore = timingsObj => LANES.reduce((sum, lane) => {
+      const demandShare = state.densities[lane] / totalDensity;
+      const timingShare = timingsObj[lane] / (timingsObj === previous ? totalPrev : totalNew);
+      return sum + Math.abs(demandShare - timingShare);
+    }, 0);
+
+    const prevMismatch = mismatchScore(previous);
+    const nextMismatch = mismatchScore(newTimings);
+    const improvement = Math.max(0, prevMismatch - nextMismatch);
+    const totalVehicles = LANES.reduce((sum, lane) => sum + densityToVehicles(state.densities[lane]), 0);
+    const congestionFactor = clamp(totalVehicles / 16, 2, 12);
+
+    return clamp(Math.round(improvement * 120 + congestionFactor), 4, 180);
+  }
+
+  function renderThinking() {
+    ui.aiContent.innerHTML = `
       <div class="ai-thinking">
-        <div style="color:var(--amber);margin-bottom:8px">◈ DeepSeek R1 REASONING</div>
+        <div style="color:var(--amber);margin-bottom:8px">◈ GEMMA 3 4B OPTIMIZATION</div>
         SENSOR SNAPSHOT:<br>
-        N: ${Math.round(densities.north)}% &nbsp; S: ${Math.round(densities.south)}%<br>
-        E: ${Math.round(densities.east)}% &nbsp;&nbsp; W: ${Math.round(densities.west)}%<br><br>
-        RUNNING OPTIMIZATION...<br>
-        COMPUTING SIGNAL TIMINGS...<br>
+        N: ${Math.round(state.densities.north)}% &nbsp; S: ${Math.round(state.densities.south)}%<br>
+        E: ${Math.round(state.densities.east)}%<br><br>
+        BUILDING PHASE PLAN...<br>
+        VALIDATING CYCLE CONSTRAINTS...<br>
         <span class="blink">▌</span>
       </div>`;
+  }
 
-    const prompt = `You are a traffic signal AI. Output ONLY a JSON object with no other text.
+  function renderPlanResult(plan) {
+    const maxT = Math.max(...LANES.map(lane => plan.timings[lane]));
+    ui.aiContent.innerHTML = `
+      <div class="ai-result">
+        <div class="ai-badge">◈ OPTIMIZATION #${state.stats.optimizations} — ${plan.source}</div>
+        ${LANES.map(lane => `
+          <div class="timing-card">
+            <div>
+              <div class="timing-lane">${LANE_SHORT[lane]}</div>
+              <div class="timing-sub">${densityToVehicles(state.densities[lane])} VEHICLES · ${Math.round(state.densities[lane])}%</div>
+            </div>
+            <div class="timing-val ${plan.timings[lane] === maxT ? 'priority' : ''}">${plan.timings[lane]}s</div>
+          </div>
+        `).join('')}
+        <div class="efficiency-wrap">
+          <div class="eff-label">Intersection Efficiency Score</div>
+          <div class="eff-bar"><div class="eff-fill" style="width:${plan.efficiency}%"></div></div>
+          <div class="eff-value">${plan.efficiency}%</div>
+        </div>
+        <div class="ai-reasoning"><strong>${plan.source} ANALYSIS:</strong><br>${plan.reasoning}</div>
+      </div>`;
+  }
 
-Sensor readings:
-North: ${Math.round(densities.north)}% (${Math.round(densities.north*0.35)} vehicles)
-South: ${Math.round(densities.south)}% (${Math.round(densities.south*0.35)} vehicles)
-East:  ${Math.round(densities.east)}% (${Math.round(densities.east*0.35)} vehicles)
-West:  ${Math.round(densities.west)}% (${Math.round(densities.west*0.35)} vehicles)
+  function applyPlan(plan) {
+    const previousTimings = { ...state.timings };
+    state.timings = { ...plan.timings };
+    state.priorityLane = plan.priority_lane;
+    state.controlMode = plan.source === 'AI' ? 'AI' : 'LOCAL';
+    if (state.controlMode === 'AI') armAIModeTimeout();
+    else clearAIModeTimeout();
+    state.efficiency = plan.efficiency;
+    state.reasoning = plan.reasoning;
+    state.planSource = plan.source;
+    state.stats.optimizations += 1;
+    state.lastOptimizeAt = nowMs();
+    state.stats.totalSavedSeconds += estimateSavedSeconds(plan.timings, previousTimings);
+    pushHistory(plan);
 
-Rules: total cycle 80-120s, min 10s per lane, max 50s per lane, allocate proportional to density.
+    if (state.simRunning) startSignalProgram();
+    syncLanePanels();
+    syncControlModeUI();
+    renderPlanResult(plan);
+    updateAutoOptimizeStatus('Optimization applied. Monitoring for next trigger.');
 
-Respond with ONLY this JSON (no markdown, no explanation):
-{"north":<int>,"south":<int>,"east":<int>,"west":<int>,"efficiency":<int 0-100>,"priority_lane":"<north|south|east|west>","reasoning":"<one sentence>"}`;
+    addLog(`Optimization #${state.stats.optimizations} complete via ${plan.source}`, 'success');
+    addLog(`Priority lane set to ${plan.priority_lane.toUpperCase()}`, 'info');
+    addLog(`Cycle timings N${plan.timings.north}/S${plan.timings.south}/E${plan.timings.east}s`, 'info');
+  }
+
+  function createLocalPlan(reasonSuffix = 'Deterministic density optimizer used.') {
+    const minGreen = 10;
+    const maxGreen = 50;
+    const avgDensity = LANES.reduce((sum, lane) => sum + state.densities[lane], 0) / LANES.length;
+    const cycleTarget = clamp(Math.round(66 + avgDensity * 0.3), 64, 96);
+    const extraPool = cycleTarget - minGreen * LANES.length;
+    const weightTotal = LANES.reduce((sum, lane) => sum + Math.max(5, state.densities[lane]), 0);
+    const timings = {};
+    const fractions = [];
+
+    LANES.forEach(lane => {
+      const share = (Math.max(5, state.densities[lane]) / weightTotal) * extraPool;
+      timings[lane] = clamp(minGreen + Math.floor(share), minGreen, maxGreen);
+      fractions.push({ lane, frac: share - Math.floor(share) });
+    });
+
+    let used = LANES.reduce((sum, lane) => sum + timings[lane], 0);
+    fractions.sort((a, b) => b.frac - a.frac);
+    for (const { lane } of fractions) {
+      if (used >= cycleTarget) break;
+      if (timings[lane] < maxGreen) {
+        timings[lane] += 1;
+        used += 1;
+      }
+    }
+
+    const priority = [...LANES].sort((a, b) => state.densities[b] - state.densities[a])[0];
+    const spread = Math.max(...LANES.map(l => state.densities[l])) - Math.min(...LANES.map(l => state.densities[l]));
+    const efficiency = clamp(Math.round(92 - spread * 0.32), 60, 96);
+
+    return {
+      timings,
+      priority_lane: priority,
+      efficiency,
+      reasoning: reasonSuffix,
+      source: 'LOCAL'
+    };
+  }
+
+  function tryParseJSONObject(text) {
+    try {
+      const parsed = JSON.parse(text);
+      if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) return parsed;
+    } catch {}
+    return null;
+  }
+
+  function extractJSONCandidates(text) {
+    const candidates = [];
+    let start = -1;
+    let depth = 0;
+    let inString = false;
+    let escaped = false;
+
+    for (let i = 0; i < text.length; i++) {
+      const ch = text[i];
+      if (escaped) {
+        escaped = false;
+        continue;
+      }
+      if (inString && ch === '\\') {
+        escaped = true;
+        continue;
+      }
+      if (ch === '"') {
+        inString = !inString;
+        continue;
+      }
+      if (inString) continue;
+
+      if (ch === '{') {
+        if (depth === 0) start = i;
+        depth += 1;
+      } else if (ch === '}' && depth > 0) {
+        depth -= 1;
+        if (depth === 0 && start !== -1) {
+          candidates.push(text.slice(start, i + 1));
+          start = -1;
+        }
+      }
+    }
+
+    return candidates;
+  }
+
+  function parseAIJSON(text) {
+    if (!text || typeof text !== 'string') return null;
+    const cleaned = text
+      .replace(/<think>[\s\S]*?<\/think>/gi, '')
+      .replace(/```(?:json)?/gi, '')
+      .replace(/```/g, '')
+      .trim();
+
+    if (!cleaned) return null;
+
+    const direct = tryParseJSONObject(cleaned);
+    if (direct) return direct;
+
+    for (const candidate of extractJSONCandidates(cleaned)) {
+      const parsed = tryParseJSONObject(candidate);
+      if (parsed) return parsed;
+    }
+
+    return null;
+  }
+
+  async function fetchJSONWithTimeout(url, options = {}, timeoutMs = 2600) {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+    try {
+      const res = await fetch(url, { ...options, signal: controller.signal });
+      if (!res.ok) throw new Error(`${url} HTTP ${res.status}`);
+      return res.json();
+    } finally {
+      clearTimeout(timeoutId);
+    }
+  }
+
+  function applyLiveServerSnapshot(sensorData, commandData) {
+    LANES.forEach(lane => {
+      const density = clamp(parseInt(sensorData?.[lane], 10) || state.densities[lane] || DEFAULT_DENSITIES[lane], 5, 100);
+      state.densities[lane] = density;
+      state.laneQueues[lane] = clamp(density / 1.55, 2, 90);
+    });
+
+    const nextTimings = {};
+    let timingsValid = true;
+    LANES.forEach(lane => {
+      const t = parseInt(commandData?.[lane], 10);
+      if (!Number.isFinite(t)) timingsValid = false;
+      nextTimings[lane] = clamp(t || state.timings[lane] || DEFAULT_TIMINGS[lane], 10, 50);
+    });
+
+    if (timingsValid) state.timings = nextTimings;
+    const priority = commandData?.priority_lane;
+    state.priorityLane = LANES.includes(priority) ? priority : state.priorityLane;
+    state.efficiency = clamp(parseInt(commandData?.efficiency, 10) || state.efficiency || 78, 0, 100);
+    state.reasoning = (commandData?.reasoning || state.reasoning || 'Live backend command applied.').toString();
+    const temp = parseFloat(sensorData?.tempC);
+    const hum = parseFloat(sensorData?.humidity);
+    if (Number.isFinite(temp)) state.tempC = temp;
+    if (Number.isFinite(hum)) state.humidity = hum;
+    state.planSource = 'SERVER';
+    state.controlMode = 'AI';
+
+    syncLanePanels();
+    syncControlModeUI();
+
+    renderPlanResult({
+      timings: { ...state.timings },
+      priority_lane: state.priorityLane,
+      efficiency: state.efficiency,
+      reasoning: state.reasoning,
+      source: 'SERVER'
+    });
+  }
+
+  function syncLiveControlState() {
+    const live = state.liveSync.online;
+    ui.btnSim.disabled = live;
+    ui.simSpeed.disabled = live;
+    ui.btnAutoOpt.disabled = live;
+
+    document.querySelectorAll('.incident-chip').forEach(btn => {
+      btn.disabled = live;
+    });
+
+    if (live) {
+      ui.btnSim.textContent = '▶ START SIM (LIVE)';
+      ui.speedLabel.textContent = 'SPEED: N/A (LIVE)';
+      ui.btnAutoOpt.classList.remove('active');
+      ui.btnAutoOpt.textContent = 'AUTO OPT: N/A (LIVE)';
+      return;
+    }
+
+    if (!state.simRunning) ui.btnSim.textContent = '▶ START SIM';
+    ui.speedLabel.textContent = `SPEED: ${ui.simSpeed.value}x`;
+    ui.btnAutoOpt.classList.toggle('active', state.autoOptimize);
+    ui.btnAutoOpt.textContent = `AUTO OPT: ${state.autoOptimize ? 'ON' : 'OFF'}`;
+  }
+
+  async function pollLiveServerState() {
+    if (!state.liveSync.enabled || state.simRunning) return;
+
+    try {
+      const [sensorData, commandData] = await Promise.all([
+        fetchJSONWithTimeout(SERVER_SENSOR_URL),
+        fetchJSONWithTimeout(SERVER_COMMAND_URL)
+      ]);
+
+      const justConnected = !state.liveSync.online;
+      state.liveSync.online = true;
+      ui.autoSimBadge.style.display = 'inline-flex';
+      ui.autoSimBadge.textContent = '● LIVE SYNC';
+
+      const signature = `${commandData?.north}|${commandData?.south}|${commandData?.east}|${commandData?.priority_lane}|${commandData?.efficiency}`;
+      const commandChanged = signature !== state.liveSync.lastCommandSignature;
+
+      applyLiveServerSnapshot(sensorData, commandData);
+      syncLiveControlState();
+
+      if (justConnected || !state.liveSync.signalRunning) {
+        startLiveSignalProgram();
+      }
+
+      if (commandChanged) {
+        state.liveSync.lastCommandSignature = signature;
+        addLog(
+          `Live command N${state.timings.north}/S${state.timings.south}/E${state.timings.east}s · ${state.priorityLane.toUpperCase()} priority`,
+          'info'
+        );
+      }
+
+      if (justConnected) addLog('Dashboard live sync connected to backend (/sensor-data, /command)', 'success');
+    } catch (err) {
+      if (state.liveSync.online) addLog(`Dashboard live sync lost: ${err.message}`, 'warn');
+      state.liveSync.online = false;
+      state.liveSync.lastCommandSignature = '';
+      clearSignalTimers();
+      allRed();
+      syncLiveControlState();
+      if (!state.simRunning) {
+        ui.autoSimBadge.style.display = 'none';
+        ui.autoSimBadge.textContent = '● AUTO SIM';
+      }
+    }
+  }
+
+  function startLiveServerSync() {
+    if (!state.liveSync.enabled) return;
+    if (state.liveSync.intervalId) clearInterval(state.liveSync.intervalId);
+    state.liveSync.intervalId = setInterval(pollLiveServerState, state.liveSync.pollMs);
+    pollLiveServerState();
+  }
+
+  function normalizePlan(raw) {
+    if (!raw || typeof raw !== 'object') return null;
+    const timings = {};
+
+    for (const lane of LANES) {
+      const n = parseInt(raw[lane], 10);
+      if (!Number.isFinite(n)) return null;
+      timings[lane] = clamp(n, 10, 50);
+    }
+
+    const priority = LANES.includes(raw.priority_lane)
+      ? raw.priority_lane
+      : [...LANES].sort((a, b) => state.densities[b] - state.densities[a])[0];
+    const efficiency = clamp(parseInt(raw.efficiency, 10) || 78, 0, 100);
+    const reasoning = (raw.reasoning || 'Timings adjusted with live densities.').toString().trim();
+
+    return {
+      timings,
+      priority_lane: priority,
+      efficiency,
+      reasoning,
+      source: 'AI'
+    };
+  }
+
+  async function requestAIPlan() {
+    const snapshot = LANES.map(lane => `${lane.toUpperCase()}: ${Math.round(state.densities[lane])}% (${densityToVehicles(state.densities[lane])} vehicles)`).join('\n');
+    const prompt = `You optimize a 3-way traffic signal. Return ONLY valid JSON.\n\n${snapshot}\n\nConstraints:\n- each lane between 10 and 50 seconds\n- total cycle between 64 and 96 seconds\n- priority_lane must be one of north,south,east\n- efficiency must be 0-100 integer\n\nOutput format:\n{"north":<int>,"south":<int>,"east":<int>,"efficiency":<int>,"priority_lane":"<north|south|east>","reasoning":"<one short sentence>"}`;
+
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 12000);
 
     try {
       const res = await fetch(LM_URL, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        signal: controller.signal,
         body: JSON.stringify({
+          model: LM_MODEL,
           messages: [{ role: 'user', content: prompt }],
-          temperature: 0.15,
-          max_tokens: 300,
+          temperature: 0,
+          max_tokens: 200,
           stream: false
         })
       });
 
-      if (!res.ok) throw new Error(`HTTP ${res.status} from LM Studio`);
+      if (!res.ok) throw new Error(`LM Studio HTTP ${res.status}`);
 
       const data = await res.json();
-      let raw = data.choices[0].message.content.trim();
+      const msg = data?.choices?.[0]?.message || {};
+      const contentPlan = normalizePlan(parseAIJSON(msg.content));
+      if (contentPlan) return contentPlan;
 
-      // Strip DeepSeek R1 <think> blocks
-      raw = raw.replace(/<think>[\s\S]*?<\/think>/gi, '').trim();
-      // Strip markdown fences
-      raw = raw.replace(/```(?:json)?|```/g, '').trim();
-      // Extract JSON object
-      const match = raw.match(/\{[\s\S]*\}/);
-      if (!match) throw new Error('Model did not return valid JSON');
-      const r = JSON.parse(match[0]);
-      if (!r.north || !r.south || !r.east || !r.west) throw new Error('Incomplete response from model');
+      const reasoningPlan = normalizePlan(parseAIJSON(msg.reasoning_content));
+      if (reasoningPlan) return reasoningPlan;
 
-      timings = { north: r.north, south: r.south, east: r.east, west: r.west };
-      lanes.forEach(l => document.getElementById(`green-${l}`).textContent = timings[l]);
-      runSignalCycle(r.priority_lane, timings);
-
-      optimizeCount++;
-      totalSaved += Math.round(Math.random() * 22 + 8);
-      document.getElementById('metricEff').textContent = r.efficiency;
-      document.getElementById('metricOpts').textContent = optimizeCount;
-      document.getElementById('metricSaved').textContent = totalSaved + 's';
-      const maxT = Math.max(r.north, r.south, r.east, r.west);
-
-      document.getElementById('aiContent').innerHTML = `
-        <div class="ai-result">
-          <div class="ai-badge">◈ OPTIMIZATION #${optimizeCount} — COMPLETE</div>
-          ${lanes.map(l => `
-            <div class="timing-card">
-              <div>
-                <div class="timing-lane">${{north:'↓ N',south:'↑ S',east:'← E',west:'→ W'}[l]}</div>
-                <div class="timing-sub">${Math.round(densities[l]*0.35)} VEHICLES · ${Math.round(densities[l])}%</div>
-              </div>
-              <div class="timing-val ${timings[l]===maxT?'priority':''}">${timings[l]}s</div>
-            </div>`).join('')}
-          <div class="efficiency-wrap">
-            <div class="eff-label">Intersection Efficiency Score</div>
-            <div class="eff-bar"><div class="eff-fill" style="width:${r.efficiency}%"></div></div>
-            <div class="eff-value">${r.efficiency}%</div>
-          </div>
-          <div class="ai-reasoning"><strong>AI ANALYSIS:</strong><br>${r.reasoning}</div>
-        </div>`;
-
-      addLog(`Optimization #${optimizeCount} complete · Efficiency: ${r.efficiency}%`, 'success');
-      addLog(`Priority → ${r.priority_lane.toUpperCase()} lane (${timings[r.priority_lane]}s green)`, 'info');
-
-    } catch (err) {
-      document.getElementById('aiContent').innerHTML = `
-        <div class="ai-thinking" style="color:var(--red)">
-          ✗ AI ENGINE ERROR<br>
-          <span style="font-size:0.6rem;color:var(--text-dim)">${err.message}</span><br><br>
-          <span style="color:var(--text-dim)">Is a model loaded in LM Studio?</span>
-        </div>`;
-      addLog('AI error: ' + err.message, 'warn');
-      lmConnected = false;
-      document.getElementById('lmChip').className = 'lm-chip disconnected';
-      document.getElementById('lmChip').textContent = '⬡ LM OFFLINE';
-      document.getElementById('lmNotice').style.display = 'block';
+      return null;
+    } finally {
+      clearTimeout(timeoutId);
     }
-
-    btn.disabled = false;
-    btn.textContent = '⚡ AI OPTIMIZE';
   }
 
-  // ─── Boot ─────────────────────────────────────────────────
-  lanes.forEach(l => { updateLaneUI(l); updateDots(l); });
-  addLog('SmartFlow v1.0 initialized', 'success');
-  addLog('NodeMCU sensor nodes: 4/4 CONNECTED', 'info');
-  addLog('Checking for LM Studio...', 'default');
+  async function checkLMStudio() {
+    ui.lmChip.className = 'lm-chip checking';
+    ui.lmChip.textContent = '⬡ CHECKING...';
+
+    try {
+      const res = await fetch('/v1/models', { signal: AbortSignal.timeout(3500) });
+      if (!res.ok) throw new Error('LM endpoint unavailable');
+
+      const data = await res.json();
+      const models = Array.isArray(data?.data) ? data.data.map(m => m.id) : [];
+      state.lmConnected = true;
+      ui.lmChip.className = 'lm-chip connected';
+      ui.lmChip.textContent = '⬡ LM STUDIO';
+      ui.lmNotice.style.display = 'none';
+
+      if (!models.includes(LM_MODEL)) {
+        addLog(`LM connected but ${LM_MODEL} not loaded`, 'warn');
+      } else {
+        addLog('LM Studio connected with Gemma 3 4B ready', 'success');
+      }
+    } catch {
+      state.lmConnected = false;
+      ui.lmChip.className = 'lm-chip disconnected';
+      ui.lmChip.textContent = '⬡ LM OFFLINE';
+      ui.lmNotice.style.display = 'block';
+      if (state.controlMode === 'AI') {
+        state.controlMode = 'AUTO';
+        syncControlModeUI();
+      }
+      clearAIModeTimeout();
+      addLog('LM Studio unavailable, LOCAL optimizer will be used', 'warn');
+    }
+  }
+
+  async function runOptimize() {
+    if (state.optimizing) return;
+    state.optimizing = true;
+    ui.btnOpt.disabled = true;
+    ui.btnOpt.textContent = '⏳ ANALYZING...';
+    renderThinking();
+
+    try {
+      if (state.liveSync.online) {
+        addLog('Triggering backend optimizer (/optimize)', 'info');
+        const serverPlanRaw = await fetchJSONWithTimeout(SERVER_OPTIMIZE_URL, { method: 'POST' }, 10000);
+        const serverPlan = normalizePlan(serverPlanRaw);
+        if (!serverPlan) throw new Error('Backend optimizer returned invalid plan');
+        serverPlan.source = 'SERVER';
+        applyPlan(serverPlan);
+        return;
+      }
+
+      if (!state.lmConnected) await checkLMStudio();
+
+      let plan = null;
+      if (state.lmConnected) {
+        addLog('Sending live sensor data to Gemma 3 4B', 'info');
+        plan = await requestAIPlan();
+      }
+
+      if (!plan) {
+        const reason = state.lmConnected
+          ? 'AI response invalid, switched to deterministic local optimizer.'
+          : 'LM Studio offline, deterministic local optimizer applied.';
+        plan = createLocalPlan(reason);
+        addLog('Fallback optimizer engaged', 'warn');
+      }
+
+      applyPlan(plan);
+    } catch (err) {
+      addLog(`Optimization error: ${err.message}`, 'warn');
+      const fallback = createLocalPlan('Optimization request failed, local fallback plan applied.');
+      applyPlan(fallback);
+    } finally {
+      state.optimizing = false;
+      ui.btnOpt.disabled = false;
+      ui.btnOpt.textContent = '⚡ AI OPTIMIZE';
+    }
+  }
+
+  function toggleAutoOptimize() {
+    if (state.liveSync.online) {
+      addLog('Live backend sync active: auto optimize is controlled by backend/NodeMCU flow', 'info');
+      return;
+    }
+    state.autoOptimize = !state.autoOptimize;
+    ui.btnAutoOpt.classList.toggle('active', state.autoOptimize);
+    ui.btnAutoOpt.textContent = `AUTO OPT: ${state.autoOptimize ? 'ON' : 'OFF'}`;
+    updateAutoOptimizeStatus();
+    addLog(`Auto optimize ${state.autoOptimize ? 'enabled' : 'disabled'}`, state.autoOptimize ? 'success' : 'warn');
+  }
+
+  function setIncident(lane) {
+    if (state.liveSync.online) {
+      addLog('Live backend sync active: local incident injection is disabled', 'warn');
+      return;
+    }
+    if (!LANES.includes(lane)) return;
+    state.incidents[lane] = clamp(state.incidents[lane] + 0.55, 0, 2);
+    updateIncidentUI();
+    addLog(`${lane.toUpperCase()} lane incident injected (level ${state.incidents[lane].toFixed(2)})`, 'warn');
+    if (!state.simRunning) updateAutoOptimizeStatus('Incident staged. Start simulation to observe effect.');
+  }
+
+  function toggleSim() {
+    if (state.liveSync.online) {
+      addLog('Live backend sync active: local simulation controls are disabled', 'warn');
+      return;
+    }
+    state.simRunning = !state.simRunning;
+
+    if (state.simRunning) {
+      ui.btnSim.textContent = '⏸ PAUSE SIM';
+      ui.autoSimBadge.style.display = 'inline-flex';
+      startSimulationLoop();
+      startSignalProgram();
+      runSimulationStep();
+      addLog('Simulation started', 'info');
+      return;
+    }
+
+    ui.btnSim.textContent = '▶ START SIM';
+    ui.autoSimBadge.style.display = 'none';
+    clearInterval(state.simInterval);
+    clearSignalTimers();
+    allRed();
+    addLog('Simulation paused', 'warn');
+  }
+
+  function resetSystem() {
+    state.simRunning = false;
+    state.optimizing = false;
+    clearInterval(state.simInterval);
+    clearSignalTimers();
+
+    state.timings = { ...DEFAULT_TIMINGS };
+    state.priorityLane = 'east';
+    state.controlMode = 'AUTO';
+    state.efficiency = 78;
+    state.reasoning = 'Initial balanced fixed-time cycle loaded.';
+    state.planSource = 'LOCAL';
+    state.stats = {
+      optimizations: 0,
+      totalSavedSeconds: 0,
+      totalArrivals: 0,
+      totalDepartures: 0
+    };
+    state.autoOptimize = false;
+    state.lastOptimizeAt = 0;
+    clearAIModeTimeout();
+    state.incidents = { north: 0, south: 0, east: 0 };
+    state.laneCollapsed = { north: false, south: false, east: false };
+    state.panelVisible = { sensors: true, ai: true };
+    state.liveSync.online = false;
+    state.liveSync.lastCommandSignature = '';
+
+    resetLaneState();
+    allRed();
+    syncLanePanels();
+
+    ui.btnOpt.disabled = false;
+    ui.btnOpt.textContent = '⚡ AI OPTIMIZE';
+    ui.btnAutoOpt.classList.remove('active');
+    ui.btnAutoOpt.textContent = 'AUTO OPT: OFF';
+    ui.btnSim.textContent = '▶ START SIM';
+    ui.autoSimBadge.style.display = 'none';
+    ui.aiContent.innerHTML = `<div class="placeholder-text"><span class="big">AI</span>SYSTEM RESET<br>READY FOR NEW SESSION</div>`;
+    syncPanelUI();
+    syncControlModeUI();
+    LANES.forEach(syncLaneCardUI);
+    updateIncidentUI();
+    updateAutoOptimizeStatus('Waiting for simulation start.');
+
+    addLog('System reset complete', 'warn');
+  }
+
+  ui.simSpeed.addEventListener('input', () => {
+    ui.speedLabel.textContent = `SPEED: ${ui.simSpeed.value}x`;
+    if (state.simRunning) {
+      startSimulationLoop();
+      startSignalProgram();
+    }
+  });
+
+  window.addEventListener('resize', syncMainColumns);
+
+  // Boot
+  loadHistory();
+  resetLaneState();
+  syncLanePanels();
+  renderHistory();
+  updateIncidentUI();
+  syncPanelUI();
+  syncControlModeUI();
+  LANES.forEach(syncLaneCardUI);
+  syncLiveControlState();
+  updateClock();
+  setInterval(updateClock, 1000);
+  addLog('SmartFlow v2 engine initialized', 'success');
+  addLog('Sensor grid online: 3/3 lanes active', 'info');
+  addLog('Starting dashboard live sync with backend endpoints...', 'default');
+  startLiveServerSync();
+  addLog('Checking LM Studio connectivity...', 'default');
   checkLMStudio();
 </script>
 </body>
