@@ -217,10 +217,24 @@ const server = http.createServer(async (req, res) => {
 
 server.listen(PORT, () => {
   console.log(`\nSmartFlow server → http://localhost:${PORT}`);
+  console.log(`  PID ${process.pid}`);
   console.log('\n  GET  /            dashboard');
   console.log('  GET  /v1/*        LM Studio proxy');
   console.log('  POST /sensor-data NodeMCU sends readings');
   console.log('  GET  /sensor-data dashboard reads live data');
   console.log('  GET  /command     NodeMCU polls signal decision');
   console.log('  POST /optimize    manual AI trigger\n');
+});
+
+server.on('error', (err) => {
+  if (err && err.code === 'EADDRINUSE') {
+    console.error(`\n[STARTUP ERROR] Port ${PORT} is already in use.`);
+    console.error('Another SmartFlow server instance may already be running.');
+    console.error('Stop the old process, or start with a different port:');
+    console.error('  PowerShell: $env:PORT=8081; node server.js\n');
+    process.exit(1);
+  }
+
+  console.error('\n[STARTUP ERROR]', err);
+  process.exit(1);
 });

@@ -32,10 +32,10 @@ Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, -1);
 #endif
 
 // WiFi
-const char* ssid = "Luxury_103";
-const char* password = "Luxury@103";
+const char* ssid = "RAPTOR";
+const char* password = "raptoromen";
 
-String server = "http://192.168.0.118:8080";
+String server = "http://192.168.137.1:8080";
 
 // OLED (moved away from default D1/D2 because those are used by sensors here)
 #define OLED_SDA D3
@@ -51,6 +51,8 @@ String server = "http://192.168.0.118:8080";
 
 // Buzzer
 #define BUZZER D8
+#define BUZZER_ACTIVE_HIGH 1
+#define BUZZER_USE_TONE 1
 
 // DHT11 (user requested on GPIO3 / RX)
 #define DHTPIN 3
@@ -75,14 +77,28 @@ unsigned long lastHeartbeatMs = 0;
 unsigned long wifiFailCount = 0;
 unsigned long lastDhtReadMs = 0;
 unsigned long lastBuzzerPhaseMs = 0;
+unsigned long lastWifiRetryMs = 0;
+unsigned long lastSensorSampleMs = 0;
+unsigned long wifiAttemptStartMs = 0;
 const unsigned long SEND_EVERY_MS = 1800;
 const unsigned long CMD_EVERY_MS = 1800;
 const unsigned long HEARTBEAT_EVERY_MS = 4000;
 const unsigned long DHT_READ_EVERY_MS = 4500;
+const unsigned long WIFI_RETRY_EVERY_MS = 3500;
+const unsigned long WIFI_CONNECT_WINDOW_MS = 12000;
+const unsigned long SENSOR_SAMPLE_GAP_MS = 70;
 const unsigned long BUZZER_ON_MS = 90;
 const unsigned long BUZZER_OFF_MS = 220;
 const unsigned long BUZZER_PAUSE_MS = 900;
 const int BUZZER_TICKS_PER_BURST = 3;
+const int BUZZER_ON_THRESHOLD = 90;
+const int BUZZER_OFF_THRESHOLD = 78;
+const unsigned long BUZZER_ON_HOLD_MS = 1800;
+const unsigned long BUZZER_OFF_HOLD_MS = 2600;
+int sensorRoundRobin = 0;
+bool wifiConnectInProgress = false;
+unsigned long buzzerHighSinceMs = 0;
+unsigned long buzzerLowSinceMs = 0;
 
 int parseJsonIntField(const String& payload, const char* key, int fallback) {
   String token = String("\"") + key + "\":";
@@ -178,31 +194,58 @@ void logScanForTargetSSID() {
 }
 
 void ensureWiFi() {
-  if (WiFi.status() == WL_CONNECTED) return;
-  DBG_PRINTLN("[WIFI] reconnecting...");
-  WiFi.disconnect();
-  WiFi.begin(ssid, password);
-
-  unsigned long start = millis();
-  while (WiFi.status() != WL_CONNECTED && millis() - start < 10000) {
-    delay(250);
-  }
-
-  if (WiFi.status() == WL_CONNECTED) {
-    DBG_PRINTF("[WIFI] connected. IP=%s RSSI=%d dBm\n", WiFi.localIP().toString().c_str(), WiFi.RSSI());
-    wifiFailCount = 0;
-  } else {
-    wifiFailCount++;
-    wl_status_t st = WiFi.status();
-    DBG_PRINTF("[WIFI] reconnect timeout. status=%d (%s), failCount=%lu\n", (int)st, wifiStatusText(st), wifiFailCount);
-    if (wifiFailCount == 1 || wifiFailCount % 4 == 0) {
-      logScanForTargetSSID();
+  wl_status_t st = WiFi.status();
+  if (st == WL_CONNECTED) {
+    if (wifiConnectInProgress) {
+      DBG_PRINTF("[WIFI] connected. IP=%s RSSI=%d dBm\n", WiFi.localIP().toString().c_str(), WiFi.RSSI());
     }
+    wifiConnectInProgress = false;
+    wifiFailCount = 0;
+    return;
   }
+
+  unsigned long now = millis();
+  if (!wifiConnectInProgress) {
+    if (now - lastWifiRetryMs < WIFI_RETRY_EVERY_MS) return;
+    lastWifiRetryMs = now;
+    wifiAttemptStartMs = now;
+    wifiConnectInProgress = true;
+    DBG_PRINTLN("[WIFI] begin connect...");
+    WiFi.begin(ssid, password);
+    return;
+  }
+
+  // While connection is in progress, do not restart too quickly.
+  if (now - wifiAttemptStartMs < WIFI_CONNECT_WINDOW_MS) return;
+
+  // Attempt timed out; retry with a fresh begin().
+  wifiFailCount++;
+  lastWifiRetryMs = now;
+  wifiAttemptStartMs = now;
+  DBG_PRINTF("[WIFI] connect timeout. status=%d (%s), failCount=%lu\n", (int)st, wifiStatusText(st), wifiFailCount);
+  if (wifiFailCount == 1 || wifiFailCount % 4 == 0) {
+    logScanForTargetSSID();
+  }
+
+  WiFi.disconnect(false);
+  WiFi.begin(ssid, password);
 }
 
 void setBuzzer(bool on) {
-  digitalWrite(BUZZER, on ? HIGH : LOW);
+#if BUZZER_USE_TONE
+  if (on) {
+    tone(BUZZER, 2400);
+  } else {
+    noTone(BUZZER);
+    digitalWrite(BUZZER, BUZZER_ACTIVE_HIGH ? LOW : HIGH);
+  }
+#else
+  if (on) {
+    digitalWrite(BUZZER, BUZZER_ACTIVE_HIGH ? HIGH : LOW);
+  } else {
+    digitalWrite(BUZZER, BUZZER_ACTIVE_HIGH ? LOW : HIGH);
+  }
+#endif
 }
 
 void updateBuzzerPattern() {
@@ -289,6 +332,7 @@ void setup(){
   WiFi.mode(WIFI_STA);
   WiFi.persistent(false);
   WiFi.setAutoReconnect(true);
+  WiFi.setSleepMode(WIFI_NONE_SLEEP);
   ensureWiFi();
 
   Wire.begin(OLED_SDA, OLED_SCL);
@@ -312,7 +356,7 @@ void sendData(){
 
   http.begin(client, url);
   http.addHeader("Content-Type","application/json");
-  http.setTimeout(2500);
+  http.setTimeout(900);
 
   String json = "{\"north\":"+String(north)+",\"south\":"+String(south)+",\"east\":"+String(east);
   if (!isnan(dhtTempC)) json += ",\"tempC\":" + String(dhtTempC, 1);
@@ -335,7 +379,7 @@ void getCommand(){
   String url = server + "/command";
 
   http.begin(client, url);
-  http.setTimeout(2500);
+  http.setTimeout(900);
   int code = http.GET();
 
   if(code>0){
@@ -347,13 +391,49 @@ void getCommand(){
     cmdEastSec = parseJsonIntField(payload, "east", cmdEastSec);
     cmdEfficiency = parseJsonIntField(payload, "efficiency", cmdEfficiency);
     activeGreenLane = parsePriorityLane(payload, activeGreenLane);
-
-    bool severe = (north > 80 || south > 80 || east > 80);
-    buzzerAlarmActive = severe;
   } else {
     DBG_PRINTF("[HTTP] GET %s failed: %d (%s)\n", url.c_str(), code, HTTPClient::errorToString(code).c_str());
   }
   http.end();
+}
+
+void updateSensorsRoundRobin() {
+  unsigned long now = millis();
+  if (now - lastSensorSampleMs < SENSOR_SAMPLE_GAP_MS) return;
+  lastSensorSampleMs = now;
+
+  if (sensorRoundRobin == 0) {
+    north = toDensity(readDistance(TRIG1, ECHO1));
+  } else if (sensorRoundRobin == 1) {
+    south = toDensity(readDistance(TRIG2, ECHO2));
+  } else {
+    east = toDensity(readDistance(TRIG3, ECHO3));
+  }
+
+  sensorRoundRobin = (sensorRoundRobin + 1) % 3;
+}
+
+void updateBuzzerAlarmState() {
+  unsigned long now = millis();
+  int peak = max(north, max(south, east));
+
+  if (peak >= BUZZER_ON_THRESHOLD) {
+    buzzerLowSinceMs = 0;
+    if (buzzerHighSinceMs == 0) buzzerHighSinceMs = now;
+    if (!buzzerAlarmActive && (now - buzzerHighSinceMs >= BUZZER_ON_HOLD_MS)) {
+      buzzerAlarmActive = true;
+    }
+  } else if (peak <= BUZZER_OFF_THRESHOLD) {
+    buzzerHighSinceMs = 0;
+    if (buzzerLowSinceMs == 0) buzzerLowSinceMs = now;
+    if (buzzerAlarmActive && (now - buzzerLowSinceMs >= BUZZER_OFF_HOLD_MS)) {
+      buzzerAlarmActive = false;
+    }
+  } else {
+    // In hysteresis band: keep current state and clear timers.
+    buzzerHighSinceMs = 0;
+    buzzerLowSinceMs = 0;
+  }
 }
 
 void updateOLED(){
@@ -382,15 +462,10 @@ void updateOLED(){
 
 void loop(){
   ensureWiFi();
+  updateSensorsRoundRobin();
+  updateBuzzerAlarmState();
   updateDhtReading();
   updateBuzzerPattern();
-
-  north = toDensity(readDistance(TRIG1,ECHO1));
-  delay(60);
-  south = toDensity(readDistance(TRIG2,ECHO2));
-  delay(60);
-  east  = toDensity(readDistance(TRIG3,ECHO3));
-  delay(60);
 
   unsigned long now = millis();
   if (now - lastSendMs >= SEND_EVERY_MS) {
@@ -411,6 +486,4 @@ void loop(){
   }
 
   updateOLED();
-
-  delay(120);
 }
