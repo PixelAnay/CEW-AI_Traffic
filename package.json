@@ -1,0 +1,31 @@
+{
+  "name": "smartflow-ai-traffic",
+  "version": "1.0.0",
+  "description": "Real-time adaptive AI traffic signal management system powered by ESP8266 IoT hardware and local Large Language Models (LM Studio, Ollama, OpenAI).",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node --watch server.js"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/PixelAnay/CEW-AI_Traffic.git"
+  },
+  "keywords": [
+    "traffic-control",
+    "smart-city",
+    "iot",
+    "esp8266",
+    "nodemcu",
+    "llm",
+    "lm-studio",
+    "ollama",
+    "edge-computing",
+    "adaptive-signals"
+  ],
+  "author": "Anay Gawate",
+  "license": "MIT",
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}

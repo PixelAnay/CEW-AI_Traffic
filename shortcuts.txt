@@ -1,3 +1,11 @@
-node server.js to start the server
+# SmartFlow Quick Commands
 
-Run with just node server.js, open http://localhost:8080
+# Start server:
+npm start
+# (or: node server.js)
+
+# Watch mode (auto-reload on save):
+npm run dev
+
+# Web Dashboard:
+http://localhost:8080

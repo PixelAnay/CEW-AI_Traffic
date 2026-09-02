@@ -559,14 +559,14 @@
   <!-- RIGHT: AI Panel -->
   <div class="ai-panel" id="aiPanel">
     <div class="panel-title-row">
-      <div class="panel-title">// AI ENGINE · Gemma 3 4B (Local)</div>
+      <div class="panel-title" id="aiPanelTitle">// AI ENGINE · Gemma 3 4B (Local)</div>
       <button class="tiny-btn" onclick="toggleAIPanel()">COLLAPSE</button>
     </div>
     <div class="lm-notice" id="lmNotice">
-      ⚠ LM STUDIO NOT DETECTED<br>
-      1. Open LM Studio<br>
+      ⚠ AI PROVIDER NOT DETECTED<br>
+      1. Start LM Studio, Ollama, or LocalAI<br>
       2. Load Gemma 3 4B (or any chat model)<br>
-      3. Developer tab → Start Server<br>
+      3. Start API server on localhost<br>
       4. Click ⬡ chip above to retry
     </div>
     <div class="history-box">
@@ -603,11 +603,33 @@
   const LANE_SHORT = { north: '↓ N', south: '↑ S', east: '← E' };
 
   const LM_URL = '/v1/chat/completions';
-  const LM_MODEL = 'google/gemma-3-4b';
+  let activeModel = 'google/gemma-3-4b';
   const SERVER_SENSOR_URL = '/sensor-data';
   const SERVER_COMMAND_URL = '/command';
   const SERVER_OPTIMIZE_URL = '/optimize';
+  const SERVER_CONFIG_URL = '/api/config';
   const HISTORY_KEY = 'smartflow.runHistory.v1';
+
+  function updateAIModelUI(modelName) {
+    if (!modelName) return;
+    const shortName = modelName.split('/').pop() || modelName;
+    const titleEl = document.getElementById('aiPanelTitle');
+    if (titleEl) {
+      titleEl.textContent = `// AI ENGINE · ${shortName}`;
+    }
+  }
+
+  async function loadServerConfig() {
+    try {
+      const cfg = await fetchJSONWithTimeout(SERVER_CONFIG_URL, {}, 2500);
+      if (cfg && cfg.model) {
+        activeModel = cfg.model;
+        updateAIModelUI(activeModel);
+      }
+    } catch {
+      // Server config is optional if running standalone
+    }
+  }
 
   const DEFAULT_DENSITIES = { north: 42, south: 34, east: 48 };
   const DEFAULT_TIMINGS = { north: 24, south: 22, east: 26 };
@@ -1199,9 +1221,10 @@
   }
 
   function renderThinking() {
+    const shortName = (activeModel.split('/').pop() || activeModel).toUpperCase();
     ui.aiContent.innerHTML = `
       <div class="ai-thinking">
-        <div style="color:var(--amber);margin-bottom:8px">◈ GEMMA 3 4B OPTIMIZATION</div>
+        <div style="color:var(--amber);margin-bottom:8px">◈ ${shortName} OPTIMIZATION</div>
         SENSOR SNAPSHOT:<br>
         N: ${Math.round(state.densities.north)}% &nbsp; S: ${Math.round(state.densities.south)}%<br>
         E: ${Math.round(state.densities.east)}%<br><br>
@@ -1533,7 +1556,7 @@
         headers: { 'Content-Type': 'application/json' },
         signal: controller.signal,
         body: JSON.stringify({
-          model: LM_MODEL,
+          model: activeModel,
           messages: [{ role: 'user', content: prompt }],
           temperature: 0,
           max_tokens: 200,
@@ -1541,7 +1564,7 @@
         })
       });
 
-      if (!res.ok) throw new Error(`LM Studio HTTP ${res.status}`);
+      if (!res.ok) throw new Error(`AI Provider HTTP ${res.status}`);
 
       const data = await res.json();
       const msg = data?.choices?.[0]?.message || {};
@@ -1563,31 +1586,38 @@
 
     try {
       const res = await fetch('/v1/models', { signal: AbortSignal.timeout(3500) });
-      if (!res.ok) throw new Error('LM endpoint unavailable');
+      if (!res.ok) throw new Error('AI endpoint unavailable');
 
       const data = await res.json();
       const models = Array.isArray(data?.data) ? data.data.map(m => m.id) : [];
       state.lmConnected = true;
       ui.lmChip.className = 'lm-chip connected';
-      ui.lmChip.textContent = '⬡ LM STUDIO';
+      ui.lmChip.textContent = '⬡ AI READY';
       ui.lmNotice.style.display = 'none';
 
-      if (!models.includes(LM_MODEL)) {
-        addLog(`LM connected but ${LM_MODEL} not loaded`, 'warn');
+      if (models.length > 0) {
+        if (!models.includes(activeModel)) {
+          const adopted = models[0];
+          addLog(`Configured model '${activeModel}' not active; auto-adopting loaded model: '${adopted}'`, 'info');
+          activeModel = adopted;
+          updateAIModelUI(activeModel);
+        } else {
+          addLog(`AI provider connected with model '${activeModel}' ready`, 'success');
+        }
       } else {
-        addLog('LM Studio connected with Gemma 3 4B ready', 'success');
+        addLog(`AI provider connected; targeting '${activeModel}'`, 'success');
       }
     } catch {
       state.lmConnected = false;
       ui.lmChip.className = 'lm-chip disconnected';
-      ui.lmChip.textContent = '⬡ LM OFFLINE';
+      ui.lmChip.textContent = '⬡ AI OFFLINE';
       ui.lmNotice.style.display = 'block';
       if (state.controlMode === 'AI') {
         state.controlMode = 'AUTO';
         syncControlModeUI();
       }
       clearAIModeTimeout();
-      addLog('LM Studio unavailable, LOCAL optimizer will be used', 'warn');
+      addLog('AI provider unavailable, LOCAL deterministic optimizer will be used', 'warn');
     }
   }
 
@@ -1613,7 +1643,8 @@
 
       let plan = null;
       if (state.lmConnected) {
-        addLog('Sending live sensor data to Gemma 3 4B', 'info');
+        const displayModel = activeModel.split('/').pop() || activeModel;
+        addLog(`Sending live sensor data to ${displayModel}`, 'info');
         plan = await requestAIPlan();
       }
 
@@ -1759,8 +1790,10 @@
   addLog('Sensor grid online: 3/3 lanes active', 'info');
   addLog('Starting dashboard live sync with backend endpoints...', 'default');
   startLiveServerSync();
-  addLog('Checking LM Studio connectivity...', 'default');
-  checkLMStudio();
+  loadServerConfig().finally(() => {
+    addLog('Checking AI provider connectivity...', 'default');
+    checkLMStudio();
+  });
 </script>
 </body>
 </html>

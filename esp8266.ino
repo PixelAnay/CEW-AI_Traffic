@@ -20,9 +20,25 @@
 #define SCREEN_HEIGHT 64
 Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, -1);
 
-// DHT is on GPIO3 (RX), so keep Serial debug off by default to avoid pin contention.
-#define DEBUG_SERIAL 0
+// Configuration loader:
+// Looks for local "config.h" (git-ignored), otherwise falls back to template/placeholders.
+#if __has_include("config.h")
+  #include "config.h"
+#elif __has_include("config.example.h")
+  #warning "Using config.example.h placeholders! Copy to config.h and set credentials."
+  #include "config.example.h"
+#else
+  static const char* WIFI_SSID = "YOUR_WIFI_SSID";
+  static const char* WIFI_PASSWORD = "YOUR_WIFI_PASSWORD";
+  static const char* SERVER_URL = "http://YOUR_PC_IP:8080";
+  #define DEBUG_SERIAL 0
+#endif
 
+#ifndef DEBUG_SERIAL
+  #define DEBUG_SERIAL 0
+#endif
+
+// DHT is on GPIO3 (RX), so keep Serial debug off by default to avoid pin contention.
 #if DEBUG_SERIAL
   #define DBG_PRINTLN(x) Serial.println(x)
   #define DBG_PRINTF(...) Serial.printf(__VA_ARGS__)
@@ -31,11 +47,10 @@ Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, -1);
   #define DBG_PRINTF(...)
 #endif
 
-// WiFi
-const char* ssid = "RAPTOR";
-const char* password = "raptoromen";
-
-String server = "http://192.168.137.1:8080";
+// WiFi & Server settings
+const char* ssid = WIFI_SSID;
+const char* password = WIFI_PASSWORD;
+String server = SERVER_URL;
 
 // OLED (moved away from default D1/D2 because those are used by sensors here)
 #define OLED_SDA D3
@@ -312,11 +327,10 @@ void setup(){
   DBG_PRINTLN("\n[BOOT] SmartFlow NodeMCU start");
   DBG_PRINTF("[BOOT] target SSID='%s'\n", ssid);
   DBG_PRINTF("[BOOT] server='%s'\n", server.c_str());
-  if (String(ssid) == "YOUR_WIFI" || String(password) == "YOUR_PASS") {
-    DBG_PRINTLN("[BOOT] WARNING: WiFi credentials still set to placeholder values");
-  }
-  if (server.indexOf("YOUR_PC_IP") >= 0) {
-    DBG_PRINTLN("[BOOT] WARNING: server still uses placeholder YOUR_PC_IP");
+  bool isPlaceholder = (String(ssid).startsWith("YOUR_WIFI") || server.indexOf("YOUR_PC_IP") >= 0);
+  if (isPlaceholder) {
+    DBG_PRINTLN("[BOOT] WARNING: WiFi or Server URL is using placeholder values.");
+    DBG_PRINTLN("[BOOT] Copy 'config.example.h' to 'config.h' and fill in your network details.");
   }
   DBG_PRINTF("[BOOT] Sensor pins N(%d,%d) S(%d,%d) E(%d,%d)\n", TRIG1, ECHO1, TRIG2, ECHO2, TRIG3, ECHO3);
   DBG_PRINTF("[BOOT] OLED SDA=%d SCL=%d, BUZZER=%d\n", OLED_SDA, OLED_SCL, BUZZER);
@@ -343,7 +357,10 @@ void setup(){
   display.setTextColor(WHITE);
   display.setCursor(0, 0);
   display.println("SMARTFLOW BOOT");
-  display.println(oledOk ? "OLED OK" : "OLED FAIL");
+  display.println(oledOk ? "OLED: OK" : "OLED: FAIL");
+  if (isPlaceholder) {
+    display.println("WARN: SET config.h");
+  }
   display.display();
 }
 

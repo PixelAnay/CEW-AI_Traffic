@@ -1,10 +1,44 @@
 const http = require('http');
 const fs = require('fs');
 const path = require('path');
+const os = require('os');
 
-const PORT = process.env.PORT || 8080;
-const LM_BASE_URL = 'http://127.0.0.1:1234';
-const AI_MIN_GAP_MS = 6000;
+// ── Environment Configuration (Zero-dependency .env loader) ───────────────────
+
+function loadEnv() {
+  const envPath = path.join(__dirname, '.env');
+  if (fs.existsSync(envPath)) {
+    try {
+      const lines = fs.readFileSync(envPath, 'utf8').split(/\r?\n/);
+      for (const line of lines) {
+        const trimmed = line.trim();
+        if (!trimmed || trimmed.startsWith('#')) continue;
+        const eqIdx = trimmed.indexOf('=');
+        if (eqIdx > 0) {
+          const key = trimmed.slice(0, eqIdx).trim();
+          let val = trimmed.slice(eqIdx + 1).trim();
+          if ((val.startsWith('"') && val.endsWith('"')) || (val.startsWith("'") && val.endsWith("'"))) {
+            val = val.slice(1, -1);
+          }
+          if (!(key in process.env)) {
+            process.env[key] = val;
+          }
+        }
+      }
+    } catch (err) {
+      console.warn('[CONFIG] Notice: unable to read .env file:', err.message);
+    }
+  }
+}
+
+loadEnv();
+
+const PORT = parseInt(process.env.PORT, 10) || 8080;
+const HOST = process.env.HOST || '0.0.0.0';
+const AI_PROVIDER_URL = (process.env.AI_PROVIDER_URL || process.env.LM_BASE_URL || 'http://127.0.0.1:1234').replace(/\/+$/, '');
+const AI_MODEL = process.env.AI_MODEL || 'google/gemma-3-4b';
+const AI_API_KEY = process.env.AI_API_KEY || '';
+const AI_MIN_GAP_MS = parseInt(process.env.AI_MIN_GAP_MS, 10) || 6000;
 
 const MIME_TYPES = {
   '.html': 'text/html; charset=utf-8',
@@ -69,27 +103,53 @@ function sendJSON(res, status, obj) {
   res.end(JSON.stringify(obj));
 }
 
-// ── LM Studio proxy ───────────────────────────────────────────────────────────
+function getLocalNetworkAddresses() {
+  const nets = os.networkInterfaces();
+  const results = [];
+  for (const name of Object.keys(nets)) {
+    for (const net of nets[name] || []) {
+      const familyV4 = typeof net.family === 'string' ? 'IPv4' : 4;
+      if (net.family === familyV4 && !net.internal) {
+        results.push({ name, address: net.address });
+      }
+    }
+  }
+  return results;
+}
 
-async function proxyToLmStudio(req, res) {
+// ── LLM Provider Reverse Proxy ────────────────────────────────────────────────
+
+async function proxyToAiProvider(req, res) {
   try {
     const body = await readBody(req);
-    const lmRes = await fetch(`${LM_BASE_URL}${req.url}`, {
+    const headers = {
+      'Content-Type': req.headers['content-type'] || 'application/json'
+    };
+
+    if (AI_API_KEY) {
+      headers['Authorization'] = `Bearer ${AI_API_KEY}`;
+    } else if (req.headers['authorization']) {
+      headers['Authorization'] = req.headers['authorization'];
+    }
+
+    const targetUrl = `${AI_PROVIDER_URL}${req.url}`;
+    const lmRes = await fetch(targetUrl, {
       method: req.method,
-      headers: { 'Content-Type': req.headers['content-type'] || 'application/json' },
+      headers,
       body: ['GET', 'HEAD'].includes(req.method) ? undefined : body
     });
+
     res.writeHead(lmRes.status, {
       'Content-Type': lmRes.headers.get('content-type') || 'application/json; charset=utf-8'
     });
     res.end(await lmRes.text());
   } catch (err) {
     res.writeHead(502, { 'Content-Type': 'application/json; charset=utf-8' });
-    res.end(JSON.stringify({ error: 'LM Studio proxy error', detail: err.message }));
+    res.end(JSON.stringify({ error: 'AI provider proxy error', detail: err.message }));
   }
 }
 
-// ── AI optimization ───────────────────────────────────────────────────────────
+// ── AI Optimization Engine ────────────────────────────────────────────────────
 
 async function runAI() {
   if (aiInFlight) {
@@ -117,20 +177,34 @@ Respond ONLY in valid JSON, no markdown, no extra text:
 {"north":<int>,"south":<int>,"east":<int>,"efficiency":<0-100>,"priority_lane":"<north|south|east>","reasoning":"<2 sentences max>"}`;
 
   try {
-    const response = await fetch(`${LM_BASE_URL}/v1/chat/completions`, {
+    const chatEndpoint = AI_PROVIDER_URL.endsWith('/v1')
+      ? `${AI_PROVIDER_URL}/chat/completions`
+      : `${AI_PROVIDER_URL}/v1/chat/completions`;
+
+    const headers = { 'Content-Type': 'application/json' };
+    if (AI_API_KEY) {
+      headers['Authorization'] = `Bearer ${AI_API_KEY}`;
+    }
+
+    const response = await fetch(chatEndpoint, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers,
       body: JSON.stringify({
-        model: 'google/gemma-3-4b',
+        model: AI_MODEL,
         max_tokens: 300,
         temperature: 0.2,
         messages: [{ role: 'user', content: prompt }]
       })
     });
 
+    if (!response.ok) {
+      throw new Error(`AI HTTP ${response.status}: ${await response.text()}`);
+    }
+
     const data = await response.json();
-    const raw = data.choices[0].message.content.trim().replace(/```json|```/g, '').trim();
-    const result = JSON.parse(raw);
+    const rawContent = data?.choices?.[0]?.message?.content || '';
+    const cleaned = rawContent.trim().replace(/```(?:json)?/gi, '').replace(/```/g, '').trim();
+    const result = JSON.parse(cleaned);
 
     signalCommand = result;
     console.log(`[AI] Priority: ${result.priority_lane} | Eff: ${result.efficiency}% | N:${result.north}s S:${result.south}s E:${result.east}s`);
@@ -152,7 +226,7 @@ function triggerAIIfDue() {
   runAI();
 }
 
-// ── Router ────────────────────────────────────────────────────────────────────
+// ── HTTP Router ───────────────────────────────────────────────────────────────
 
 const server = http.createServer(async (req, res) => {
   setCorsHeaders(res);
@@ -164,12 +238,23 @@ const server = http.createServer(async (req, res) => {
 
   const urlPath = decodeURIComponent((req.url || '/').split('?')[0]);
 
-  // 1. LM Studio proxy — dashboard AI calls go straight through
+  // 1. AI Provider Proxy — dashboard calls go directly to LLM
   if (urlPath.startsWith('/v1/')) {
-    return proxyToLmStudio(req, res);
+    return proxyToAiProvider(req, res);
   }
 
-  // 2. NodeMCU posts real sensor readings (north + south + east)
+  // 2. Server Configuration Metadata
+  if (urlPath === '/api/config' && req.method === 'GET') {
+    return sendJSON(res, 200, {
+      model: AI_MODEL,
+      providerUrl: AI_PROVIDER_URL,
+      minGapMs: AI_MIN_GAP_MS,
+      port: PORT,
+      hasApiKey: Boolean(AI_API_KEY)
+    });
+  }
+
+  // 3. NodeMCU posts real sensor readings (north + south + east)
   if (urlPath === '/sensor-data' && req.method === 'POST') {
     try {
       const body = JSON.parse((await readBody(req)).toString());
@@ -186,23 +271,23 @@ const server = http.createServer(async (req, res) => {
     }
   }
 
-  // 3. Dashboard reads live sensor data
+  // 4. Dashboard reads live sensor data
   if (urlPath === '/sensor-data' && req.method === 'GET') {
     return sendJSON(res, 200, { ...sensorData, ...envData });
   }
 
-  // 4. NodeMCU polls for latest AI signal command
+  // 5. NodeMCU polls for latest AI signal command
   if (urlPath === '/command' && req.method === 'GET') {
     return sendJSON(res, 200, signalCommand);
   }
 
-  // 5. Dashboard manual AI trigger
+  // 6. Dashboard manual AI trigger
   if (urlPath === '/optimize' && req.method === 'POST') {
     await runAI();
     return sendJSON(res, 200, signalCommand);
   }
 
-  // 6. Static file serving
+  // 7. Static file serving
   if (req.method !== 'GET') {
     return sendJSON(res, 405, { error: 'Method not allowed' });
   }
@@ -215,15 +300,30 @@ const server = http.createServer(async (req, res) => {
   return serveFile(res, path.join(__dirname, safePath));
 });
 
-server.listen(PORT, () => {
-  console.log(`\nSmartFlow server → http://localhost:${PORT}`);
-  console.log(`  PID ${process.pid}`);
-  console.log('\n  GET  /            dashboard');
-  console.log('  GET  /v1/*        LM Studio proxy');
-  console.log('  POST /sensor-data NodeMCU sends readings');
-  console.log('  GET  /sensor-data dashboard reads live data');
-  console.log('  GET  /command     NodeMCU polls signal decision');
-  console.log('  POST /optimize    manual AI trigger\n');
+server.listen(PORT, HOST, () => {
+  console.log(`\n======================================================`);
+  console.log(`  SmartFlow Traffic Optimization Engine`);
+  console.log(`======================================================`);
+  console.log(`  Dashboard URL      : http://localhost:${PORT}`);
+  console.log(`  AI Provider Base   : ${AI_PROVIDER_URL}`);
+  console.log(`  Configured Model   : ${AI_MODEL}`);
+  console.log(`  Network IP list (use in config.h for ESP8266):`);
+  const localIps = getLocalNetworkAddresses();
+  if (localIps.length === 0) {
+    console.log(`    (No external IPv4 network interfaces detected)`);
+  } else {
+    for (const { name, address } of localIps) {
+      console.log(`    • ${address.padEnd(15)} (${name}) -> http://${address}:${PORT}`);
+    }
+  }
+  console.log(`\nAvailable Endpoints:`);
+  console.log('  GET  /            Dashboard UI');
+  console.log('  GET  /api/config  Server runtime configuration');
+  console.log('  POST /sensor-data ESP8266 posts lane densities');
+  console.log('  GET  /sensor-data Dashboard reads live metrics');
+  console.log('  GET  /command     ESP8266 reads signal timings');
+  console.log('  POST /optimize    Manual trigger for AI cycle');
+  console.log('  ALL  /v1/*        AI provider reverse proxy\n');
 });
 
 server.on('error', (err) => {
